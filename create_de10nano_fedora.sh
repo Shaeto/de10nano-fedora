@@ -12,7 +12,7 @@ VERSION=1.00.00
 usage() {
     echo "
 Usage: $(basename ${0}) <options>
-   --workspace=PATH - path to working directory (by default = script path)
+   --workspace=PATH - base path for working directories (by default = script path)
    --cleanup        - remove all temporary data from workspace folder and exit
    --image=IMAGE    - raw image file name
    --media=DEVICE   - media device file (/dev/[sdX|mmcblkX])
