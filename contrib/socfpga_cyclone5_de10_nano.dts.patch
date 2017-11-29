@@ -1,0 +1,10 @@
+--- a/arch/arm/boot/dts/Makefile	2017-11-15 12:09:19.000000000 +0300
++++ b/arch/arm/boot/dts/Makefile	2017-11-26 20:38:40.541033829 +0300
+@@ -777,6 +777,7 @@
+ 	socfpga_cyclone5_mcvevk.dtb \
+ 	socfpga_cyclone5_socdk.dtb \
+ 	socfpga_cyclone5_de0_sockit.dtb \
++	socfpga_cyclone5_de10_nano.dtb \
+ 	socfpga_cyclone5_sockit.dtb \
+ 	socfpga_cyclone5_socrates.dtb \
+ 	socfpga_cyclone5_sodia.dtb \
