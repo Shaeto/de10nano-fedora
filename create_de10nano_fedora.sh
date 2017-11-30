@@ -213,16 +213,7 @@ popd () {
     command popd "$@" > /dev/null
 }
 
-# check media file, copy fat32, boot and root volumes
-prepare_media_files() {
-    if [ ! -f "$IMAGE" ] ; then
-        echo
-        echo "please provide path to fedora arm .raw image file (unpacked) using --image option"
-        echo
-        usage
-        exit 1
-    fi
-
+get_media_volume_info() {
     prep_sector_size=512
 
     prep_fat32_start=0
@@ -248,6 +239,10 @@ prepare_media_files() {
     prep_swap_size=0
     prep_swap_fsize=""
     prep_swap_uuid=""
+
+    prep_a2_start=0
+    prep_a2_end=0
+    prep_a2_size=0
 
     while read v
     do
@@ -293,11 +288,28 @@ prepare_media_files() {
             prep_root_end=$vol_end
             prep_root_size=$vol_size
             prep_root_fsize=$vol_fsize
+        elif [ "$vol_type" = "a2" ] ; then
+            prep_a2_start=$vol_start
+            prep_a2_end=$vol_end
+            prep_a2_size=$vol_size
         fi
     done <<< \
-	$(fdisk -l "$IMAGE" | grep -e "^.*[[:digit:]]\+\([[:blank:]]\+\|[[:blank:]]\+\*[[:blank:]]\+\)[[:blank:]]\+[[:digit:]]\+[[:blank:]]\+[[:digit:]]\+[[:blank:]]\+[[:digit:]]\+[[:blank:]]\+[0-9\.]\+[GMKT]\?.*$" | \
+	$(fdisk -l "$1" | grep -e "^.*[[:digit:]]\+\([[:blank:]]\+\|[[:blank:]]\+\*[[:blank:]]\+\)[[:blank:]]\+[[:digit:]]\+[[:blank:]]\+[[:digit:]]\+[[:blank:]]\+[[:digit:]]\+[[:blank:]]\+[0-9\.]\+[GMKT]\?.*$" | \
 	    sed -e "s/^.*\([[:digit:]]\+\)\([[:blank:]]\+\|[[:blank:]]\+\*[[:blank:]]\+\)[[:blank:]]\+\([[:digit:]]\+\)[[:blank:]]\+\([[:digit:]]\+\)[[:blank:]]\+\([[:digit:]]\+\)[[:blank:]]\+\([0-9\.]\+[GMKT]\?\)[[:blank:]]\+\([[:alnum:]]\+\).*$/\1\2 \3 \4 \5 \6 \7/" | \
 	    awk 'BEGIN { FS = "[ \t]+" } { for(i=1;i<=NF;i++){printf "%s ", $i}; printf "\n" }')
+}
+
+# check media file, copy fat32, boot and root volumes
+prepare_media_files() {
+    if [ ! -f "$IMAGE" ] ; then
+        echo
+        echo "please provide path to fedora arm .raw image file (unpacked) using --image option"
+        echo
+        usage
+        exit 1
+    fi
+
+    get_media_volume_info "$IMAGE"
 
     if [ $prep_fat32_size -le 0 -o $prep_boot_size -le 0 -o $prep_root_size -le 0 ] ; then
 	echo "Failed to detect fedora source image volumes [$IMAGE]"
@@ -362,6 +374,7 @@ prepare_media_files() {
     echo "root.size=$(($prep_root_size*${prep_sector_size}))" >> "${sdcard_volumes_info}"
     if [ "$prep_swap_uuid" ] ; then
 	echo "swap.uuid=$prep_root_uuid" >> "${sdcard_volumes_info}"
+	echo "swap.size=$((${prep_swap_size}*${prep_sector_size}))" >> "${sdcard_volumes_info}"
     fi
     echo "fat32.size=$(($prep_fat32_size*${prep_sector_size}))" >> "${sdcard_volumes_info}"
 }
@@ -447,10 +460,10 @@ compile_linux() {
     make "${linux_src_make_config_file}"
 
 # compile zImage
-    make -j10 uImage
+    make -j4 uImage
 
 # compile device tree
-    make -j10 "$(basename "${linux_dtb_file}")"
+    make -j4 "$(basename "${linux_dtb_file}")"
 
 # copy artifacts to associated sdcard directory
     cp "${linux_uImage_file}" "${sdcard_fat32_uImage_file}"
@@ -618,6 +631,128 @@ EOF
     popd
 }
 
+# partition_sdcard() ###########################################################
+partition_sdcard() {
+    # manually partitioning the sdcard
+        # sudo fdisk /dev/sdx
+            # use the following commands
+            # n p 3 <default> 4095  t   a2 (2048 is default first sector)
+            # n p 1 <default> +32M  t 1  b (4096 is default first sector)
+            # n p 2 <default> +512M t 2 83 (69632 is default first sector)
+            # w
+        # result
+            # Device     Boot Start     End Sectors  Size Id Type
+            # /dev/sdb1        4096   69631   65536   32M  b W95 FAT32
+            # /dev/sdb2       69632 1118207 1048576  512M 83 Linux
+            # /dev/sdb3        2048    4095    2048    1M a2 unknown
+        # note that you can choose any size for the FAT32 and Linux partitions,
+        # but the a2 partition must be 1M.
+
+    # automatically partitioning the sdcard
+    # wipe partition table
+    sudo dd if="/dev/zero" of="${sdcard_dev}" bs=512 count=1
+
+    # create partitions
+    # no need to specify the partition number for the first invocation of
+    # the "t" command in fdisk, because there is only 1 partition at this
+    # point
+    echo -e "n\np\n3\n\n4095\nt\na2\nn\np\n1\n\n+${sdcard_partition_size_fat32}\nt\n1\nb\nn\np\n2\n\n+${sdcard_partition_size_linux}\nt\n2\n83\nw\nq\n" | sudo fdisk "${sdcard_dev}"
+
+    # create filesystems
+    sudo mkfs.vfat "${sdcard_dev_fat32}"
+    sudo mkfs.ext3 -F "${sdcard_dev_ext3}"
+}
+
+# partition_file() ###########################################################
+partition_file() {
+    part_file_fat32_size=$(grep "fat32\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
+    part_file_boot_size=$(grep "boot\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
+    part_file_boot_uuid=$(grep "boot\.uuid" "${sdcard_volumes_info}" | sed -e "s/.*=\([[:alnum:]-]\+\)$/\1/")
+    part_file_root_size=$(grep "root\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
+    part_file_root_uuid=$(grep "root\.uuid" "${sdcard_volumes_info}" | sed -e "s/.*=\([[:alnum:]-]\+\)$/\1/")
+    part_file_swap_size=$(grep "swap\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
+    part_file_swap_uuid=$(grep "swap\.uuid" "${sdcard_volumes_info}" | sed -e "s/.*=\([[:alnum:]-]\+\)$/\1/")
+
+    if [ -z "${part_file_swap_size}" ] ; then
+	# 256MB
+	part_file_swap_size=268435456
+    fi
+
+    part_file_size=$((${part_file_fat32_size}+${part_file_boot_size}+${part_file_root_size}+${part_file_swap_size}+2097152+33554432))
+    part_file_size=$((${part_file_size}/1048576))
+
+    echo "Creating image file ${sdcard_dev} size ${part_file_size}M"
+    dd if=/dev/zero bs=1M count=${part_file_size} status=none > "${sdcard_dev}"
+
+    echo "Partitioning file ${sdcard_dev}"
+    sdcard_partition_size_fat32="$((${part_file_fat32_size}/1048576))M"
+    sdcard_partition_size_boot="$((${part_file_boot_size}/1048576))M"
+    sdcard_partition_size_root="$((${part_file_root_size}/1048576))M"
+    sdcard_partition_size_swap="$((${part_file_swap_size}/1048576))M"
+
+    make_fat32_seq="n\np\n1\n\n+${sdcard_partition_size_fat32}\nt\nc\n"
+    make_a2_seq="n\np\n2\n\n+${sdcard_partition_size_a2}\nt\n2\na2\n"
+    make_boot_seq="n\np\n3\n\n+${sdcard_partition_size_boot}\nt\n3\n83\na\n3\n"
+    make_extpart_seq="n\ne\n\n\n"
+    make_swap_seq="n\n\n+${sdcard_partition_size_swap}\nt\n5\n82\n"
+    #make_root_seq="n\n\n+${sdcard_partition_size_root}\nt\n6\n83\n"
+    make_root_seq="n\n\n\nt\n6\n83\n"
+
+    echo -e "${make_fat32_seq}${make_a2_seq}${make_boot_seq}${make_extpart_seq}${make_swap_seq}${make_root_seq}w\nq\n" | fdisk "${sdcard_dev}" > /dev/null
+
+    get_media_volume_info "${sdcard_dev}"
+
+    if [ $prep_fat32_size -le 0 -o $prep_boot_size -le 0 -o $prep_root_size -le 0 -o $prep_swap_size -le 0 -o $prep_a2_size -le 0 ] ; then
+        echo "Failed to detect new volumes in [${sdcard_dev}]"
+        exit 1
+    fi
+
+    echo "Formatting FAT32"
+    mount_dev=$(losetup --show -o $(($prep_fat32_start*${prep_sector_size})) --sizelimit $(($prep_fat32_size*${prep_sector_size})) -f "${sdcard_dev}")
+    mkfs -t vfat "${mount_dev}" > /dev/null
+    echo "Transferring data from ${sdcard_fat32_dir}"
+    mount -t vfat "${mount_dev}" "${image_mnt_dir}"
+    cp -a "${sdcard_fat32_dir}"/* "${image_mnt_dir}"
+    umount "${image_mnt_dir}"
+    losetup -d "${mount_dev}"
+
+    echo "Formatting BOOT"
+    mount_dev=$(losetup --show -o $(($prep_boot_start*${prep_sector_size})) --sizelimit $(($prep_boot_size*${prep_sector_size})) -f "${sdcard_dev}")
+    mke2fs -q -t ext2 -U "${part_file_boot_uuid}" "${mount_dev}"
+    echo "Transferring data from ${sdcard_boot_dir}"
+    mount "${mount_dev}" "${image_mnt_dir}"
+    cp -a "${sdcard_boot_dir}"/* "${image_mnt_dir}"
+    umount "${image_mnt_dir}"
+    losetup -d "${mount_dev}"
+
+    echo "Formatting SWAP"
+    mount_dev=$(losetup --show -o $(($prep_swap_start*${prep_sector_size})) --sizelimit $(($prep_swap_size*${prep_sector_size})) -f "${sdcard_dev}")
+    if [ "${part_file_swap_uuid}" ] ; then
+	mkswap -f -U "${part_file_swap_uuid}" "${mount_dev}" > /dev/null
+    else
+	mkswap -f "${mount_dev}" > /dev/null
+    fi
+    losetup -d "${mount_dev}"
+
+    echo "Formatting ROOT"
+    mount_dev=$(losetup --show -o $(($prep_root_start*${prep_sector_size})) --sizelimit $(($prep_root_size*${prep_sector_size})) -f "${sdcard_dev}")
+    mke2fs -q -t ext4 -O ^has_journal -U "${part_file_root_uuid}" "${mount_dev}"
+    echo "Transferring data from ${sdcard_root_dir}"
+    mount "${mount_dev}" "${image_mnt_dir}"
+    cp -a "${sdcard_root_dir}"/* "${image_mnt_dir}"
+    umount "${image_mnt_dir}"
+    losetup -d "${mount_dev}"
+
+    echo "Installing Cyclone V U-Boot+SPL"
+    mount_dev=$(losetup --show -o $(($prep_a2_start*${prep_sector_size})) --sizelimit $(($prep_a2_size*${prep_sector_size})) -f "${sdcard_dev}")
+    dd status=none if="${sdcard_a2_preloader_bin_file}" of="${mount_dev}"
+    losetup -d "${mount_dev}"    
+
+    echo
+    echo "${sdcard_dev} is ready, now you can write it to sdcard using dd or arm-image-installer"
+    echo
+}
+
 # Script execution #############################################################
 
 if [ $(/usr/bin/id -un) != "root" ] ; then
@@ -648,6 +783,7 @@ if [ $CLEANUP -ne 0 ] ; then
 fi
 
 required_utils="/usr/bin/mkimage
+/usr/sbin/mkfs.vfat
 /usr/sbin/blkid
 /usr/sbin/losetup
 /usr/bin/curl
@@ -657,7 +793,7 @@ required_utils="/usr/bin/mkimage
 /usr/bin/arm-none-eabi-gcc"
 
 have_required_tools=1
-for ru in $(required_utils) ; do
+for ru in ${required_utils} ; do
     if [ ! -x "$ru" ] ; then
 	echo "$ru - is not available"
 	have_required_tools=0
@@ -680,13 +816,13 @@ mkdir -p "${image_mnt_dir}"
 prepare_media_files
 compile_uboot
 compile_linux
-#create_rootfs
 
 # Write sdcard if it exists
 if [ -z "${sdcard_dev}" ]; then
     echo "sdcard argument not provided => no sdcard written."
-
 elif [ -b "${sdcard_dev}" ]; then
+    echo "sdcard direct partitioning is not implemented please run with --media=output-image-file.img"
 #    partition_sdcard
-    echo "write_sdcard"
+elif [ -z $(echo "${sdcard_dev}" | grep -e "^\/dev\/") ]; then
+    partition_file
 fi
