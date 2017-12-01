@@ -401,7 +401,7 @@ function prepare_media_files() {
     echo "root.uuid=$prep_root_uuid" >> "${sdcard_volumes_info}"
     echo "root.size=$(($prep_root_size*${prep_sector_size}))" >> "${sdcard_volumes_info}"
     if [ "$prep_swap_uuid" ] ; then
-	echo "swap.uuid=$prep_root_uuid" >> "${sdcard_volumes_info}"
+	echo "swap.uuid=$prep_swap_uuid" >> "${sdcard_volumes_info}"
 	echo "swap.size=$((${prep_swap_size}*${prep_sector_size}))" >> "${sdcard_volumes_info}"
     fi
     echo "fat32.size=$(($prep_fat32_size*${prep_sector_size}))" >> "${sdcard_volumes_info}"
