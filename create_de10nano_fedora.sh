@@ -357,7 +357,7 @@ function prepare_media_files() {
 
     echo "Copying content of the FAT32 volume to ${sdcard_fat32_dir}"
     rm -rf "${sdcard_fat32_dir}"/*
-    cp -a "${image_mnt_dir}"/* "${sdcard_fat32_dir}/"
+    cp -Rf "${image_mnt_dir}"/* "${sdcard_fat32_dir}/"
     umount "${image_mnt_dir}"
     losetup -d "${mount_dev}"
 
@@ -714,6 +714,9 @@ EOF
 
     mkimage -A arm -O linux -T script -C none -a 0 -e 0 -n "${quartus_project_name}" -d "${uboot_script_file}" "${sdcard_fat32_uboot_scr_file}"
 
+# change working directory back to script directory
+    popd
+
 # copy artifacts to associated sdcard directory
     cp "${uboot_img_file}" "${sdcard_a2_preloader_bin_file}"
 
@@ -734,17 +737,25 @@ EOF
 	fi
     fi
 
-    if [ "$SOC_RBF" -a -s "$SOC_RBF" ] ; then
-	echo "Copying $SOC_RBF to ${sdcard_fat32_soc_rbf_file}"
-	cp -f "$SOC_RBF" "${sdcard_fat32_soc_rbf_file}"
+    if [ "$SOC_RBF" ] ; then
+	if [ -s "$SOC_RBF" ] ; then
+	    echo "Copying $SOC_RBF to ${sdcard_fat32_soc_rbf_file}"
+	    cp -f "$SOC_RBF" "${sdcard_fat32_soc_rbf_file}"
+	else
+	    echo "Error: unable to find soc system rbf file $SOC_RBF"
+	    exit 255
+	fi
     fi
 
-    if [ "$SOC_DTB" -a -s "$SOC_DTB" ] ; then
-	echo "Copying $SOC_DTB to ${sdcard_fat32_dir}"
-	cp -f "$SOC_DTB" "${sdcard_fat32_soc_dtb_file}"
+    if [ "$SOC_DTB" ] ; then
+	if [ -s "$SOC_DTB" ] ; then
+	    echo "Copying $SOC_DTB to ${sdcard_fat32_dir}"
+	    cp -f "$SOC_DTB" "${sdcard_fat32_soc_dtb_file}"
+	else
+	    echo "Error: unable to find soc system dtb file $SOC_RBF"
+	    exit 255
+	fi
     fi
-# change working directory back to script directory
-    popd
 }
 
 # partition_sdcard() ###########################################################
@@ -851,11 +862,12 @@ function partition_file() {
 
     echo "Formatting BOOT"
     mount_dev=$(losetup --show -o $(($prep_boot_start*${prep_sector_size})) --sizelimit $(($prep_boot_size*${prep_sector_size})) -f "${sdcard_dev}")
-    mke2fs -q -t ext2 -U "${part_file_boot_uuid}" "${mount_dev}"
+    mke2fs -q -t ext4 -U "${part_file_boot_uuid}" "${mount_dev}"
     echo "Transferring data from ${sdcard_boot_dir}"
     mount "${mount_dev}" "${image_mnt_dir}"
     cp -a "${sdcard_boot_dir}"/* "${image_mnt_dir}"
     umount "${image_mnt_dir}"
+    e2fsck -y "${mount_dev}"
     losetup -d "${mount_dev}"
 
     echo "Formatting SWAP"
@@ -874,6 +886,7 @@ function partition_file() {
     mount "${mount_dev}" "${image_mnt_dir}"
     cp -a "${sdcard_root_dir}"/* "${image_mnt_dir}"
     umount "${image_mnt_dir}"
+    e2fsck -y "${mount_dev}"
     losetup -d "${mount_dev}"
 
     echo "Installing Cyclone V U-Boot+SPL"
