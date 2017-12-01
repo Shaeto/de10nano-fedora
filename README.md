@@ -1,5 +1,6 @@
 # de10nano-fedora
-Automate Media Creation for DE0 and DE10 Nano SoC Fedora ARM
+
+## Automate Media Creation for DE0 and DE10 Nano SoC Fedora ARM
 
 ```bash
 Usage: create_de10nano_fedora.sh <options>
@@ -34,33 +35,44 @@ This script is making possible to:
 * optionally initialize DE10 Nano ADV7513 HDMI bridge and provide fbdev driver for altera frame reader 1.0/2.0 (based on original altera driver)
 * write result image to file or sdcard device
 
-How to use:
+## How to use
 
-1. download Fedora ARM disk image from https://arm.fedoraproject.org
+1. download [Fedora ARM disk image](https://arm.fedoraproject.org)
+
+```bash
   wget -L "https://download.fedoraproject.org/pub/fedora/linux/releases/27/Spins/armhfp/images/Fedora-Minimal-armhfp-27-1.6-sda.raw.xz"
+```
 
 2. unxz image
-  unxz Fedora-Minimal-armhfp-27-1.6-sda.raw.xz
+
+```bash
+  xz -d -c Fedora-Minimal-armhfp-27-1.6-sda.raw.xz > Fedora-Minimal-armhfp-27-1.6-sda.raw
+```
 
 3. develop and build cyclone v fpga project using altera quartus
 4. build sdcard image
 
-###Example 1
+### Example 1
+
 ```bash
 sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda.raw --media=fedora-27-1.6-de10nano.img
 ```
 
-###Example 2
+### Example 2
+
 ```bash
 sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda.raw --media=fedora-27-1.6-de10nano.img \
     --soc-rbf=/home/fpga/myproject/hello_world.rbf \
     --soc-dtb=/home/fpga/myproject/hello_workd.dtb
 ```
 
-###Example 3 for de10 nano + real time linux + mksocfpga for MachineKit.io base image
+### Example 3 for de10 nano + real time linux + [Hostmot2 FPGA](https://github.com/machinekit/mksocfpga) for [MachineKit.io](http://www.machinekit.io)
+
 ```bash
 sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda.raw --media=fedora-27-1.6-de10nano.img --init-hdmi --selinux=off \
     --soc-rbf=/home/fpga/myproject/DE10_Nano_SoC_DB25.7I76_7I76_7I76_7I76.rbf \
     --soc-dtb=/home/fpga/myproject/soc_system.dtb \
     --preempt-rt
 ```
+
+## How it works
