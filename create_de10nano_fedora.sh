@@ -385,6 +385,8 @@ function prepare_media_files() {
 
     if [ $prep_swap_size -gt 0 ] ; then
 	echo "Checking SWAP volume"
+	# workaround, wait some time to make sure kernel is removed root partition uuid from tables
+	sleep 2
 	mount_dev=$(losetup --show -o $(($prep_swap_start*${prep_sector_size})) -r --sizelimit $(($prep_swap_size*${prep_sector_size})) -f "$IMAGE")
 	prep_swap_uuid=$(blkid -s UUID -o value "${mount_dev}")
 	losetup -d "${mount_dev}"
