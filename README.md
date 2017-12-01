@@ -1,4 +1,4 @@
-# de10nano-fedora
+# Fedora Arm on Terasic DE0 and DE10 Nano SoC boards
 
 ## Automate Media Creation for DE0 and DE10 Nano SoC Fedora ARM
 
@@ -32,12 +32,13 @@ This script is making possible to:
 
 * boot Fedora ARM on Terasic DE0 and DE10 Nano Cyclone V SoC boards using original Linux Kernel 4.13.13 (optionally with RT_PREEMPT real linux patch)
 * optionally initialize Cyclone V HPS using user specific programming and dtb files
-* optionally initialize DE10 Nano ADV7513 HDMI bridge and provide fbdev driver for altera frame reader 1.0/2.0 (based on original altera driver)
+* optionally initialize DE10 Nano ADV7513 HDMI bridge and provide fbdev driver for altera frame reader ip 1.0/2.0 1024x768 (based on original altera driver)
 * write result image to file or sdcard device
+* resulting SDCARD still is compatible with Raspberry Pi
 
 ## How to use
 
-1. download [Fedora ARM disk image](https://arm.fedoraproject.org)
+1. download [Fedora ARM](https://arm.fedoraproject.org)
 
 ```bash
   wget -L "https://download.fedoraproject.org/pub/fedora/linux/releases/27/Spins/armhfp/images/Fedora-Minimal-armhfp-27-1.6-sda.raw.xz"
@@ -54,11 +55,16 @@ This script is making possible to:
 
 ### Example 1
 
+build image for de0/de10 without hps bridge
+
 ```bash
-sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda.raw --media=fedora-27-1.6-de10nano.img
+sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda.raw \
+    --media=fedora-27-1.6-de10nano.img
 ```
 
 ### Example 2
+
+build image for de0/de10 with user defined fpga programming file and dtb
 
 ```bash
 sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda.raw --media=fedora-27-1.6-de10nano.img \
@@ -66,7 +72,9 @@ sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda
     --soc-dtb=/home/fpga/myproject/hello_workd.dtb
 ```
 
-### Example 3 for de10 nano + real time linux + [Hostmot2 FPGA](https://github.com/machinekit/mksocfpga) for [MachineKit.io](http://www.machinekit.io)
+### Example 3
+
+build image for de10 nano + real time linux + [Hostmot2 FPGA](https://github.com/machinekit/mksocfpga) + hdmi output 1024x768 for [MachineKit.io](http://www.machinekit.io)
 
 ```bash
 sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda.raw --media=fedora-27-1.6-de10nano.img --init-hdmi --selinux=off \
