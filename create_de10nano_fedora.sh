@@ -1,15 +1,17 @@
 #!/bin/bash
 
 # Automate Media Creation for DE10 Nano SoC Fedora ARM
+# Evgeny Sabelskiy <evgeny.sabelskiy@gmail.com>
 
 # based on fedora /usr/bin/arm-image-installer
-# also inspired by https://github.com/sahandKashani/SoC-FPGA-Design-Guide
+# and
 # https://github.com/sahandKashani/SoC-FPGA-Design-Guide/blob/master/DE0_Nano_SoC/DE0_Nano_SoC_demo/create_linux_system.sh
+#
 # Current version
 VERSION=1.00.00
 
 # usage message
-usage() {
+function usage() {
     echo "
 Usage: $(basename ${0}) <options>
    --workspace=PATH - base path for working directories (by default = script path)
@@ -17,6 +19,9 @@ Usage: $(basename ${0}) <options>
    --image=IMAGE    - raw image file name
    --media=DEVICE   - media device file (/dev/[sdX|mmcblkX])
    --preempt-rt     - build real-time Linux kernel (CONFIG_PREEMPT_RT)
+   --init-hdmi      - init ADV7513 HDMI bridge and show startup logo
+   --soc-rbf=RBF    - path to fpga bitstream file
+   --soc-dtb=DTB    - path to soc system dtb file
    --selinux=ON/OFF - Turn SELinux off/on as needed
    --norootpass     - Remove the root password
    -y		    - Assumes yes, will not wait for confirmation
@@ -33,6 +38,9 @@ Example: $(basename ${0}) --image=Fedora-Rawhide.raw --media=/dev/mmcblk0
 DIR=$(readlink -m $(dirname $0))
 WORKSPACE="$DIR"
 PREEMPT_RT=0
+INIT_HDMI=0
+SOC_RBF=""
+SOC_DTB=""
 CLEANUP=0
 
 # check the args
@@ -63,6 +71,25 @@ while [ $# -gt 0 ]; do
             ;;
         --cleanup)
             CLEANUP=1
+            ;;
+        --init-hdmi)
+            INIT_HDMI=1
+            ;;
+	--soc-rbf*)
+            if echo $1 | grep '=' >/dev/null ; then
+                SOC_RBF=$(echo $1 | sed 's/^--soc-rbf=//')
+            else
+                SOC_RBF=$2
+                shift
+            fi
+            ;;
+	--soc-dtb*)
+            if echo $1 | grep '=' >/dev/null ; then
+                SOC_DTB=$(echo $1 | sed 's/^--soc-dtb=//')
+            else
+                SOC_DTB=$2
+                shift
+            fi
             ;;
         --media*)
             if echo $1 | grep '=' >/dev/null ; then
@@ -152,7 +179,8 @@ sdcard_fat32_dir="$WORKSPACE/sdcard/fat32"
 sdcard_boot_dir="$WORKSPACE/sdcard/boot"
 sdcard_root_dir="$WORKSPACE/sdcard/root"
 sdcard_volumes_info="$WORKSPACE/sdcard/os.volumes"
-sdcard_fat32_rbf_file="${sdcard_fat32_dir}/soc_system.rbf"
+sdcard_fat32_soc_rbf_file="${sdcard_fat32_dir}/soc_system.rbf"
+sdcard_fat32_soc_dtb_file="${sdcard_fat32_dir}/soc_system.dtb"
 sdcard_fat32_uboot_img_file="${sdcard_fat32_dir}/$(basename "${uboot_img_file}")"
 sdcard_fat32_uboot_scr_file="${sdcard_fat32_dir}/boot.scr"
 sdcard_fat32_uImage_file="${sdcard_fat32_dir}/uImage"
@@ -205,15 +233,15 @@ sdcard_dev_linux="${sdcard_dev}${sdcard_dev_linux_id}"
 #sdcard_dev_fat32_mount_point="$(readlink -m "sdcard/mount_point_fat32")"
 #sdcard_dev_ext3_mount_point="$(readlink -m "sdcard/mount_point_ext3")"
 
-pushd () {
+function pushd () {
     command pushd "$@" > /dev/null
 }
 
-popd () {
+function popd () {
     command popd "$@" > /dev/null
 }
 
-get_media_volume_info() {
+function get_media_volume_info() {
     prep_sector_size=512
 
     prep_fat32_start=0
@@ -300,10 +328,10 @@ get_media_volume_info() {
 }
 
 # check media file, copy fat32, boot and root volumes
-prepare_media_files() {
+function prepare_media_files() {
     if [ ! -f "$IMAGE" ] ; then
         echo
-        echo "please provide path to fedora arm .raw image file (unpacked) using --image option"
+        echo "Error: Please provide path to Fedora ARM .raw image file (unpacked) using --image option"
         echo
         usage
         exit 1
@@ -312,7 +340,7 @@ prepare_media_files() {
     get_media_volume_info "$IMAGE"
 
     if [ $prep_fat32_size -le 0 -o $prep_boot_size -le 0 -o $prep_root_size -le 0 ] ; then
-	echo "Failed to detect fedora source image volumes [$IMAGE]"
+	echo "Error: Unable to find Fedora ARM volumes in [$IMAGE]. Please choose a valid image."
 	exit 1
     fi
 
@@ -377,10 +405,39 @@ prepare_media_files() {
 	echo "swap.size=$((${prep_swap_size}*${prep_sector_size}))" >> "${sdcard_volumes_info}"
     fi
     echo "fat32.size=$(($prep_fat32_size*${prep_sector_size}))" >> "${sdcard_volumes_info}"
+
+    # turn off selinux
+    if [ "$SELINUX" != "" ] ; then
+        if [ "$(echo ${SELINUX} | tr [:lower:] [:upper:])" = "OFF" ] ; then
+                echo "= Turning SELinux off ..."
+                sed -i 's/append/& enforcing=0/' "${sdcard_boot_dir}/extlinux/extlinux.conf"
+                # turn on selinux
+        elif [ "$(echo ${SELINUX} | tr [:lower:] [:upper:])" = "ON" ] ; then
+                echo "= Turning SELinux on ..."
+                sed -i 's/ enforcing=0//' "${sdcard_boot_dir}/extlinux/extlinux.conf"
+        fi
+    fi
+    # Remove root password
+    if [ "$NOROOTPASS" = "1" ] ; then
+        echo "= Removing the root password."
+        sed -i 's/root:x:/root::/' "${sdcard_root_dir}/etc/passwd"
+    fi
+    # Add ssh key to the image
+    if [ "$SSH_KEY" != "" ] ; then
+        if [ -f $SSH_KEY ]; then
+                echo "= Adding SSH key to authorized keys."
+                mkdir "${sdcard_root_dir}/root/.ssh/" &> /dev/null
+                cat $SSH_KEY >> "${sdcard_root_dir}/root/.ssh/authorized_keys"
+                chmod -R u=rwX,o=,g= "${sdcard_root_dir}/root/.ssh/"
+        else
+                echo "= SSH key $SSH_KEY : Not Found!"
+                echo "= WARNING: No SSH Key Added."
+        fi
+    fi
 }
 
 # compile_linux() ##############################################################
-compile_linux() {
+function compile_linux() {
 # if linux source tree doesn't exist, then download it
     if [ $PREEMPT_RT -ne 0 ] ; then
         if [ -d "${linux_src_dir}" -a ! -f "${linux_src_dir}/.de10nano_rt" ] ; then
@@ -429,6 +486,9 @@ compile_linux() {
             popd
         fi
         cp -f "${linux_src_make_config_file_path}" "${linux_src_dir}/arch/arm/configs/"
+
+	echo -e "CONFIG_LOCALVERSION=\"-soc\"\nCONFIG_LOCALVERSION_AUTO=n" >> "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
+
         cp -f "${linux_src_altvipfb_driver_path}" "${linux_src_dir}/drivers/video/fbdev/"
         patch -d "${linux_src_dir}" -p1 < "${linux_src_altvipfb_config_patch_path}"
         cp -f "${linux_dtb_file_src_path}" "${linux_src_dir}/arch/arm/boot/dts/"
@@ -462,6 +522,9 @@ compile_linux() {
 # compile zImage
     make -j4 uImage
 
+# compile zImage
+    make -j4 modules
+
 # compile device tree
     make -j4 "$(basename "${linux_dtb_file}")"
 
@@ -469,12 +532,25 @@ compile_linux() {
     cp "${linux_uImage_file}" "${sdcard_fat32_uImage_file}"
     cp "${linux_dtb_file}" "${sdcard_fat32_dtb_file}"
 
+# copy modules
+    make modules_install INSTALL_MOD_PATH="${sdcard_root_dir}"
+
 # change working directory back to script directory
     popd
 }
 
+# taken there https://github.com/0x783czar
+function generate_mac ()  {
+  hexchars="0123456789abcdef"
+  echo "24:df:86$(
+    for i in {1..6}; do 
+      echo -n ${hexchars:$(( $RANDOM % 16 )):1}
+    done | sed -e 's/\(..\)/:\1/g'
+  )"
+}
+
 # compile_uboot ################################################################
-compile_uboot() {
+function compile_uboot() {
 
 # delete old artifacts
     rm -rf "${sdcard_fat32_uboot_scr_file}" \
@@ -503,6 +579,9 @@ compile_uboot() {
 # compile uboot
     make -j4
 
+# generate ethernet mac address
+local soc_ethaddr=$(generate_mac)
+
 # create uboot script
     cat <<EOF > "${uboot_script_file}"
 ################################################################################
@@ -513,7 +592,7 @@ env default -a
 
 echo --- Setting Env variables ---
 
-setenv ethaddr 82:3a:f0:75:4b:99
+setenv ethaddr ${soc_ethaddr}
 
 # sdcard boot partition number
 setenv mmcloadpart ${sdcard_partition_number_boot}
@@ -536,7 +615,12 @@ setenv fdtaddr 0x00000100
 setenv fpgadata 0x2000000
 
 # Set the devicetree image
-setenv fdtimage $(basename ${sdcard_fat32_dtb_file});
+if test -e mmc 0:\${mmcload_fat32_part} $(basename ${sdcard_fat32_soc_dtb_file}) ; then
+  echo Found SoC specific devicetree image $(basename ${sdcard_fat32_soc_dtb_file})
+  setenv fdtimage $(basename ${sdcard_fat32_soc_dtb_file});
+else
+  setenv fdtimage $(basename ${sdcard_fat32_dtb_file});
+fi
 
 # hdmi
 setenv HDMI_enable_dvi "no"
@@ -584,26 +668,32 @@ setenv stdout serial
 # save environment to sdcard (not needed, but useful to avoid CRC errors on a new sdcard)
 # saveenv
 
-################################################################################
-echo --- Programming FPGA ---
+if test -e mmc 0:\${mmcload_fat32_part} $(basename ${sdcard_fat32_soc_rbf_file}) ; then
+  ################################################################################
+  echo --- Programming FPGA ---
 
-# load rbf from FAT partition into memory
-fatload mmc 0:1 \${fpgadata} $(basename ${sdcard_fat32_rbf_file});
+  # load rbf from FAT partition into memory
+  fatload mmc 0:1 \${fpgadata} $(basename ${sdcard_fat32_soc_rbf_file});
 
-# program FPGA
-fpga load 0 \${fpgadata} \${filesize};
+  # program FPGA
+  fpga load 0 \${fpgadata} \${filesize};
 
-# enable HPS-to-FPGA, FPGA-to-HPS, LWHPS-to-FPGA bridges
-bridge enable;
+  # enable HPS-to-FPGA, FPGA-to-HPS, LWHPS-to-FPGA bridges
+  bridge enable;
+  ################################################################################
+fi;
 
-################################################################################
 echo --- Booting Linux ---
 
 mmc rescan;
 
-# initialize hdmi adv7513 ic
-echo "initialise hdmi ic"
-run hdmi_cfg;
+if test -e mmc 0:\${mmcload_fat32_part} de10_nano_hdmi_config.bin -a -e mmc 0:\${mmcload_fat32_part} STARTUP.BMP ; then
+  # initialize hdmi adv7513 ic
+  echo "initializing hdmi ic"
+  run hdmi_cfg;
+else
+  echo "Failed to initialize HDMI IC - missing one of required files"
+fi;
 
 # load device tree to memory
 load mmc 0:\${mmcload_fat32_part} \${fdtaddr} \${fdtimage};
@@ -627,12 +717,38 @@ EOF
 # copy artifacts to associated sdcard directory
     cp "${uboot_img_file}" "${sdcard_a2_preloader_bin_file}"
 
+    if [ $INIT_HDMI -ne 0 ] ; then
+	if [ -f "$DIR/contrib/de10_nano_hdmi_config.bin" ] ; then
+	    cp -f "$DIR/contrib/de10_nano_hdmi_config.bin" "${sdcard_fat32_dir}"
+	fi
+	if [ -f "$DIR/contrib/STARTUP.BMP" ] ; then
+	    cp -f "$DIR/contrib/STARTUP.BMP" "${sdcard_fat32_dir}"
+	fi
+
+	# actually dump_adv7513_edid.bin and dump_adv7513_regs.bin not required
+	if [ -f "$DIR/contrib/dump_adv7513_regs.bin" ] ; then
+	    cp -f "$DIR/contrib/dump_adv7513_regs.bin" "${sdcard_fat32_dir}"
+	fi
+	if [ -f "$DIR/contrib/dump_adv7513_edid.bin" ] ; then
+	    cp -f "$DIR/contrib/dump_adv7513_edid.bin" "${sdcard_fat32_dir}"
+	fi
+    fi
+
+    if [ "$SOC_RBF" -a -s "$SOC_RBF" ] ; then
+	echo "Copying $SOC_RBF to ${sdcard_fat32_soc_rbf_file}"
+	cp -f "$SOC_RBF" "${sdcard_fat32_soc_rbf_file}"
+    fi
+
+    if [ "$SOC_DTB" -a -s "$SOC_DTB" ] ; then
+	echo "Copying $SOC_DTB to ${sdcard_fat32_dir}"
+	cp -f "$SOC_DTB" "${sdcard_fat32_soc_dtb_file}"
+    fi
 # change working directory back to script directory
     popd
 }
 
 # partition_sdcard() ###########################################################
-partition_sdcard() {
+function partition_sdcard() {
     # manually partitioning the sdcard
         # sudo fdisk /dev/sdx
             # use the following commands
@@ -664,7 +780,7 @@ partition_sdcard() {
 }
 
 # partition_file() ###########################################################
-partition_file() {
+function partition_file() {
     part_file_fat32_size=$(grep "fat32\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
     part_file_boot_size=$(grep "boot\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
     part_file_boot_uuid=$(grep "boot\.uuid" "${sdcard_volumes_info}" | sed -e "s/.*=\([[:alnum:]-]\+\)$/\1/")
@@ -681,6 +797,23 @@ partition_file() {
     part_file_size=$((${part_file_fat32_size}+${part_file_boot_size}+${part_file_root_size}+${part_file_swap_size}+2097152+33554432))
     part_file_size=$((${part_file_size}/1048576))
 
+    if [ -s "${sdcard_dev}" ] ; then
+	echo "*****************************************************"
+	echo "******** Destination is file ${sdcard_dev}"
+	echo "******** WARNING! ALL DATA WILL BE DESTROYED ********"
+	echo "*****************************************************"
+	if [ "$NOASK" != 1 ] ; then
+    	    echo " "
+    	    echo " Type 'YES' to proceed, anything else to exit now "
+    	    echo " "
+    	    # wait for agreement
+    	    read -p "= Proceed? " PROCEED
+    	    if [ "$(echo ${PROCEED} | tr [:lower:] [:upper:])" != "YES" ] ; then
+                echo "User exit, no image written."
+                exit 0
+    	    fi
+	fi
+    fi
     echo "Creating image file ${sdcard_dev} size ${part_file_size}M"
     dd if=/dev/zero bs=1M count=${part_file_size} status=none > "${sdcard_dev}"
 
@@ -756,7 +889,7 @@ partition_file() {
 # Script execution #############################################################
 
 if [ $(/usr/bin/id -un) != "root" ] ; then
-    echo "please run $0 under root permissions"
+    echo "Error: This script requires 'sudo' privileges in order to write to disk & mount media."
     exit 255
 fi
 
