@@ -153,7 +153,7 @@ uboot_script_file="${uboot_src_dir}/u-boot.script"
 uboot_img_file="${uboot_src_dir}/u-boot-with-spl.sfp"
 
 linux_dir="$WORKSPACE/sw/hps/linux"
-linux_src_version="4.13.13"
+linux_src_version="4.14.3"
 linux_src_dir="${linux_dir}/linux-${linux_src_version}"
 
 linux_src_file="linux-${linux_src_version}.tar.xz"
@@ -161,10 +161,10 @@ linux_src_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_file}"
 linux_src_crc="sha256sums.asc"
 linux_src_crc_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_crc}"
 
-linux_rt_patch="patch-${linux_src_version}-rt5.patch.xz"
-linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.13/${linux_rt_patch}"
+linux_rt_patch="patch-${linux_src_version}-rt4.patch.xz"
+linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/${linux_rt_patch}"
 linux_rt_patch_crc="sha256sums.asc"
-linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.13/${linux_rt_patch_crc}"
+linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/${linux_rt_patch_crc}"
 
 linux_src_make_config_file="socfpga_de10nano_defconfig"
 linux_src_make_config_file_path="$DIR/contrib/${linux_src_make_config_file}"
@@ -430,13 +430,14 @@ function compile_linux() {
     if [ ! -d "${linux_src_dir}" ]; then
         echo "downloading ${linux_src_crc} from ${linux_src_crc_url}"
         curl -s "${linux_src_crc_url}" | grep "${linux_src_file}" >"${linux_dir}/${linux_src_crc}.kernel"
-        if [ ! -f "${linux_dir}/${linux_src_file}" ]; then
+        local kernel_remote_size=$(curl -sI "${linux_src_url}" | grep -i "Content-Length" | awk '{print $2}')
+        if [ ! -f "${linux_dir}/${linux_src_file}" -o $(stat --format=%s "${linux_dir}/${linux_src_file}") != "${kernel_remote_size}" ]; then
             echo "downloading ${linux_src_url}"
-            curl "${linux_src_url}" >"${linux_dir}/${linux_src_file}"
+            curl -L -C - -o "${linux_dir}/${linux_src_file}" "${linux_src_url}"
         fi
         echo "validating linux kernel source file ${linux_dir}/${linux_src_file}"
         pushd "${linux_dir}"
-        sha256sum --status -c "${linux_dir}/${linux_src_crc}.kernel"
+        local sharc=$(sha256sum --status -c "${linux_dir}/${linux_src_crc}.kernel")
         if [ $? -ne 0 ]; then
             echo "${linux_dir}/${linux_src_file} is broken please delete it and start script again"
             exit 255
@@ -788,7 +789,7 @@ function partition_media() {
 
     if [ "${part_media_type}" = "device" -o -s "${sdcard_dev}" ]; then
         echo "*****************************************************"
-        echo "******** Destination is file ${sdcard_dev}"
+        echo "******** Destination is ${sdcard_dev}"
         echo "******** WARNING! ALL DATA WILL BE DESTROYED ********"
         echo "*****************************************************"
         if [ "$NOASK" != 1 ]; then
