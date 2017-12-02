@@ -83,4 +83,17 @@ sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda
     --preempt-rt
 ```
 
+### Example 4
+
+build image for de10 nano + real time linux + [Hostmot2 FPGA](https://github.com/machinekit/mksocfpga) + hdmi output 1024x768 for [MachineKit.io](http://www.machinekit.io), write image to sdcard /dev/sdc, resize root partition to fill media
+
+```bash
+sudo ./create_de10nano_fedora.sh --image=fedora/Fedora-Minimal-armhfp-27-1.6-sda.raw --media=fedora-27-1.6-de10nano.img     --init-hdmi \
+    --selinux=off \
+    --preempt-rt \
+    --resizefs \
+    --soc-rbf=/home/fpga/myproject/DE10_Nano_SoC_DB25.7I76_7I76_7I76_7I76.rbf \
+    --soc-dtb=/home/fpga/myproject/soc_system.dtb
+```
+
 ## How it works
