@@ -30,7 +30,7 @@ Warning: this script requires root permissions and a lot of free space (aproxima
 
 This script is making possible to:
 
-* boot Fedora ARM on Terasic DE0 and DE10 Nano Cyclone V SoC boards using original Linux Kernel 4.13.13 (optionally with RT_PREEMPT real linux patch)
+* boot Fedora ARM on Terasic DE0 and DE10 Nano Cyclone V SoC boards using original Linux Kernel 4.14.3 (optionally with RT_PREEMPT real linux patch)
 * optionally initialize Cyclone V HPS using user specific programming and dtb files
 * optionally initialize DE10 Nano ADV7513 HDMI bridge and provide fbdev driver for altera frame reader ip 1.0/2.0 1024x768 (based on original altera driver)
 * write result image to file or sdcard device
