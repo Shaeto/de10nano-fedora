@@ -464,6 +464,9 @@ function compile_linux() {
         fi
         cp -f "${linux_src_make_config_file_path}" "${linux_src_dir}/arch/arm/configs/"
 
+        if [ $PREEMPT_RT -ne 0 ]; then
+            echo -e "CONFIG_PREEMPT=y\nCONFIG_PREEMPT_RT=y\nCONFIG_PREEMPT_RT_FULL=y\n" >> "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
+        fi
         echo -e "CONFIG_LOCALVERSION=\"-soc\"\nCONFIG_LOCALVERSION_AUTO=n" >>"${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
 
         cp -f "${linux_src_altvipfb_driver_path}" "${linux_src_dir}/drivers/video/fbdev/"
