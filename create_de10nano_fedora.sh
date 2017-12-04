@@ -161,7 +161,7 @@ linux_src_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_file}"
 linux_src_crc="sha256sums.asc"
 linux_src_crc_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_crc}"
 
-linux_rt_patch="patch-${linux_src_version}-rt4.patch.xz"
+linux_rt_patch="patch-${linux_src_version}-rt5.patch.xz"
 linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/${linux_rt_patch}"
 linux_rt_patch_crc="sha256sums.asc"
 linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/${linux_rt_patch_crc}"
@@ -430,15 +430,14 @@ function compile_linux() {
     if [ ! -d "${linux_src_dir}" ]; then
         echo "downloading ${linux_src_crc} from ${linux_src_crc_url}"
         curl -s "${linux_src_crc_url}" | grep "${linux_src_file}" >"${linux_dir}/${linux_src_crc}.kernel"
-        local kernel_remote_size=$(curl -sI "${linux_src_url}" | grep -i "Content-Length" | awk '{print $2}')
-        if [ ! -f "${linux_dir}/${linux_src_file}" -o $(stat --format=%s "${linux_dir}/${linux_src_file}") != "${kernel_remote_size}" ]; then
+        if [ ! -f "${linux_dir}/${linux_src_file}" ]; then
             echo "downloading ${linux_src_url}"
-            curl -L -C - -o "${linux_dir}/${linux_src_file}" "${linux_src_url}"
+            curl -L -o "${linux_dir}/${linux_src_file}" "${linux_src_url}"
         fi
         echo "validating linux kernel source file ${linux_dir}/${linux_src_file}"
         pushd "${linux_dir}"
-        local sharc=$(sha256sum --status -c "${linux_dir}/${linux_src_crc}.kernel")
-        if [ $? -ne 0 ]; then
+        local sharc=$(sha256sum --status -c "${linux_dir}/${linux_src_crc}.kernel" || echo "invalid")
+        if [ "$sharc" = "invalid" ]; then
             echo "${linux_dir}/${linux_src_file} is broken please delete it and start script again"
             exit 255
         fi
