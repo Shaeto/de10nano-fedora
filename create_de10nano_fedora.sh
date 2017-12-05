@@ -43,6 +43,7 @@ SOC_RBF=""
 SOC_DTB=""
 CLEANUP=0
 RESIZEFS=0
+NPROC="/usr/bin/nproc"
 
 # check the args
 while [ $# -gt 0 ]; do
@@ -461,13 +462,6 @@ function compile_linux() {
             xz -d -c "${linux_dir}/${linux_rt_patch}" | patch -d "${linux_src_dir}" -p1
             popd
         fi
-        cp -f "${linux_src_make_config_file_path}" "${linux_src_dir}/arch/arm/configs/"
-
-        if [ $PREEMPT_RT -ne 0 ]; then
-            echo -e "CONFIG_PREEMPT=y\nCONFIG_PREEMPT_RT=y\nCONFIG_PREEMPT_RT_FULL=y\n" >> "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
-        fi
-        echo -e "CONFIG_LOCALVERSION=\"-soc\"\nCONFIG_LOCALVERSION_AUTO=n" >>"${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
-
         cp -f "${linux_src_altvipfb_driver_path}" "${linux_src_dir}/drivers/video/fbdev/"
         patch -d "${linux_src_dir}" -p1 <"${linux_src_altvipfb_config_patch_path}"
         cp -f "${linux_dtb_file_src_path}" "${linux_src_dir}/arch/arm/boot/dts/"
@@ -478,6 +472,16 @@ function compile_linux() {
         else
             touch "${linux_src_dir}/.de10nano"
         fi
+    fi
+    
+    if [ ! -f "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")" \
+	-o "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")" -ot "${linux_src_make_config_file_path}" ] ; then
+        cp -f "${linux_src_make_config_file_path}" "${linux_src_dir}/arch/arm/configs/"
+
+        if [ $PREEMPT_RT -ne 0 ]; then
+            echo -e "CONFIG_PREEMPT=y\nCONFIG_PREEMPT_RT=y\nCONFIG_PREEMPT_RT_FULL=y\n" >> "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
+        fi
+        echo -e "CONFIG_LOCALVERSION=\"-soc\"\nCONFIG_LOCALVERSION_AUTO=n" >>"${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
     fi
 
     # change working directory to linux source tree directory
@@ -499,13 +503,13 @@ function compile_linux() {
     make "${linux_src_make_config_file}"
 
     # compile zImage
-    make -j4 uImage
+    make -j${MAKE_ALLOWED_CORES} uImage
 
     # compile zImage
-    make -j4 modules
+    make -j${MAKE_ALLOWED_CORES} modules
 
     # compile device tree
-    make -j4 "$(basename "${linux_dtb_file}")"
+    make -j${MAKE_ALLOWED_CORES} "$(basename "${linux_dtb_file}")"
 
     # copy artifacts to associated sdcard directory
     cp "${linux_uImage_file}" "${sdcard_fat32_uImage_file}"
@@ -556,7 +560,7 @@ function compile_uboot() {
     make "${uboot_src_make_config_file}"
 
     # compile uboot
-    make -j4
+    make -j${MAKE_ALLOWED_CORES}
 
     # generate ethernet mac address
     local soc_ethaddr=$(generate_mac)
@@ -1000,6 +1004,13 @@ done
 if [ $have_required_tools -eq 0 ]; then
     echo "please install all required tools!"
     exit 255
+fi
+
+# get number of cpu cores
+if [ -x "$NPROC" ] ; then
+  MAKE_ALLOWED_CORES=$($NPROC)
+else
+  MAKE_ALLOWED_CORES=4
 fi
 
 # Create sdcard output directories
