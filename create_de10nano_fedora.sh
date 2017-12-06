@@ -691,7 +691,7 @@ fi;
 load mmc 0:\${mmcload_fat32_part} \${loadaddr} \${bootimage};
 
 # set kernel boot arguments, then boot the kernel
-setenv bootargs mem=${linux_kernel_mem_arg} console=ttyS0,115200 root=\${mmcroot} rw rootwait;
+setenv bootargs mem=${linux_kernel_mem_arg} console=ttyS0,115200 earlyprintk uio_pdrv_genirq.of_id=generic-uio root=\${mmcroot} rw rootwait;
 bootm \${loadaddr} - \${fdtaddr};
 EOF
 
