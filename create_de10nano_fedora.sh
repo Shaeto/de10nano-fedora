@@ -154,7 +154,7 @@ uboot_script_file="${uboot_src_dir}/u-boot.script"
 uboot_img_file="${uboot_src_dir}/u-boot-with-spl.sfp"
 
 linux_dir="$WORKSPACE/sw/hps/linux"
-linux_src_version="4.14.3"
+linux_src_version="4.14.6"
 linux_src_dir="${linux_dir}/linux-${linux_src_version}"
 
 linux_src_file="linux-${linux_src_version}.tar.xz"
@@ -162,7 +162,7 @@ linux_src_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_file}"
 linux_src_crc="sha256sums.asc"
 linux_src_crc_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_crc}"
 
-linux_rt_patch="patch-${linux_src_version}-rt5.patch.xz"
+linux_rt_patch="patch-${linux_src_version}-rt7.patch.xz"
 linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/${linux_rt_patch}"
 linux_rt_patch_crc="sha256sums.asc"
 linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/${linux_rt_patch_crc}"
