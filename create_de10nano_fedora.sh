@@ -163,9 +163,9 @@ linux_src_crc="sha256sums.asc"
 linux_src_crc_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_crc}"
 
 linux_rt_patch="patch-${linux_src_version}-rt15.patch.xz"
-linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/${linux_rt_patch}"
+linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/older/${linux_rt_patch}"
 linux_rt_patch_crc="sha256sums.asc"
-linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/${linux_rt_patch_crc}"
+linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/older/${linux_rt_patch_crc}"
 
 linux_src_make_config_file="socfpga_de10nano_defconfig"
 linux_src_make_config_file_path="$DIR/contrib/${linux_src_make_config_file}"
