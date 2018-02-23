@@ -836,7 +836,7 @@ function partition_media() {
     sdcard_partition_size_swap="$((${part_file_swap_size} / 1048576))M"
     sdcard_partition_size_ext="$(((${part_file_root_size} + ${part_file_swap_size} + 4 * 1048576) / 1048576))M"
 
-    make_fat32_seq="n\np\n1\n\n+${sdcard_partition_size_fat32}\nt\nc\n"
+    make_fat32_seq="n\np\n1\n\n+${sdcard_partition_size_fat32}\nt\nc\na\n1\n"
     make_a2_seq="n\np\n2\n\n+${sdcard_partition_size_a2}\nt\n2\na2\n"
     make_boot_seq="n\np\n3\n\n+${sdcard_partition_size_boot}\nt\n3\n83\na\n3\n"
 
