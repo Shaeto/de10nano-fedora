@@ -154,7 +154,8 @@ uboot_script_file="${uboot_src_dir}/u-boot.script"
 uboot_img_file="${uboot_src_dir}/u-boot-with-spl.sfp"
 
 linux_dir="$WORKSPACE/sw/hps/linux"
-linux_src_version="4.14.18"
+linux_rt_version="4.14.78-rt47"
+linux_src_version=$(echo "$linux_rt_version" | sed "s/\-.*$//")
 linux_src_dir="${linux_dir}/linux-${linux_src_version}"
 
 linux_src_file="linux-${linux_src_version}.tar.xz"
@@ -162,15 +163,15 @@ linux_src_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_file}"
 linux_src_crc="sha256sums.asc"
 linux_src_crc_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_crc}"
 
-linux_rt_patch="patch-${linux_src_version}-rt15.patch.xz"
+linux_rt_patch="patch-${linux_rt_version}.patch.xz"
 linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/older/${linux_rt_patch}"
 linux_rt_patch_crc="sha256sums.asc"
 linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/older/${linux_rt_patch_crc}"
 
 linux_src_make_config_file="socfpga_de10nano_defconfig"
 linux_src_make_config_file_path="$DIR/contrib/${linux_src_make_config_file}"
-linux_src_altvipfb_driver_path="$DIR/contrib/drivers/altvipfb.c"
-linux_src_altvipfb_config_patch_path="$DIR/contrib/drivers/altvipfb.patch"
+linux_src_altvipfb2_driver_paths="$DIR/contrib/drivers/altvipfb.c $DIR/contrib/drivers/altvipfb2.c $DIR/contrib/drivers/altvipfb2-plat.c $DIR/contrib/drivers/altvipfb2.h"
+linux_src_altvipfb2_config_patch_path="$DIR/contrib/drivers/altvipfb.patch"
 linux_kernel_mem_arg="1024M"
 linux_uImage_file="${linux_src_dir}/arch/arm/boot/uImage"
 linux_dtb_file="${linux_src_dir}/arch/arm/boot/dts/socfpga_cyclone5_de10_nano.dtb"
@@ -429,8 +430,8 @@ function compile_linux() {
     fi
 
     if [ ! -d "${linux_src_dir}" ]; then
-        echo "downloading ${linux_src_crc} from ${linux_src_crc_url}"
-        curl -s "${linux_src_crc_url}" | grep "${linux_src_file}" >"${linux_dir}/${linux_src_crc}.kernel"
+        echo "downloading ${linux_src_crc} from ${linux_src_crc_url} for ${linux_src_file}"
+        curl -sL "${linux_src_crc_url}" | grep "${linux_src_file}" > "${linux_dir}/${linux_src_crc}.kernel"
         if [ ! -f "${linux_dir}/${linux_src_file}" ]; then
             echo "downloading ${linux_src_url}"
             curl -L -o "${linux_dir}/${linux_src_file}" "${linux_src_url}"
@@ -446,11 +447,11 @@ function compile_linux() {
         popd
         if [ $PREEMPT_RT -ne 0 ]; then
             echo "downloading ${linux_rt_patch_crc} from ${linux_rt_patch_crc_url}"
-            curl -s "${linux_rt_patch_crc_url}" | grep "${linux_rt_patch}" >"${linux_dir}/${linux_rt_patch_crc}.rt-patch"
+            curl -sL "${linux_rt_patch_crc_url}" | grep "${linux_rt_patch}" >"${linux_dir}/${linux_rt_patch_crc}.rt-patch"
 
             if [ ! -f "${linux_dir}/${linux_rt_patch}" ]; then
                 echo "downloading ${linux_rt_patch_url}"
-                curl "${linux_rt_patch_url}" >"${linux_dir}/${linux_rt_patch}"
+                curl -L "${linux_rt_patch_url}" >"${linux_dir}/${linux_rt_patch}"
             fi
             echo "validating kernel rt-preempt patch file ${linux_dir}/${linux_rt_patch}"
             pushd "${linux_dir}"
@@ -462,8 +463,11 @@ function compile_linux() {
             xz -d -c "${linux_dir}/${linux_rt_patch}" | patch -d "${linux_src_dir}" -p1
             popd
         fi
-        cp -f "${linux_src_altvipfb_driver_path}" "${linux_src_dir}/drivers/video/fbdev/"
-        patch -d "${linux_src_dir}" -p1 <"${linux_src_altvipfb_config_patch_path}"
+	for fb in ${linux_src_altvipfb2_driver_paths}
+        do
+          cp -f $fb "${linux_src_dir}/drivers/video/fbdev/"
+        done
+        patch -d "${linux_src_dir}" -p1 <"${linux_src_altvipfb2_config_patch_path}"
         cp -f "${linux_dtb_file_src_path}" "${linux_src_dir}/arch/arm/boot/dts/"
         patch -d "${linux_src_dir}" -p1 <"${linux_dtb_file_patch_path}"
 

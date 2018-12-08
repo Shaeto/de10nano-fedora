@@ -18,9 +18,6 @@
  *
  */
 
-// modified version of alvipfb
-// added minimal compatibility for VIP2 FB registers
-
 #include <linux/dma-mapping.h>
 #include <linux/fb.h>
 #include <linux/init.h>
@@ -41,15 +38,6 @@
 #define ALTVIPFB_FRAME0_HEIGHT		36
 #define ALTVIPFB_FRAME0_INTERLACED	40
 
-#define ALTVIPFB2_CONTROL		0
-#define ALTVIPFB2_STATUS		0x4
-#define ALTVIPFB2_INTERRUPT		0x8
-#define ALTVIPFB2_FRAME_COUNTER		0xC
-#define ALTVIPFB2_FRAME_DROP		0x10
-#define ALTVIPFB2_FRAME_INFO		0x14
-#define ALTVIPFB2_FRAME_START		0x18
-#define ALTVIPFB2_FRAME_READER		0x1C
-
 struct altvipfb_type;
 
 struct altvipfb_dev {
@@ -58,7 +46,6 @@ struct altvipfb_dev {
 	struct resource *reg_res;
 	void __iomem *base;
 	int mem_word_width;
-	int altr_vip_version;
 	u32 pseudo_palette[PALETTE_SIZE];
 };
 
@@ -100,13 +87,7 @@ static int altvipfb_of_setup(struct altvipfb_dev *fbdev)
 	int ret;
 	u32 bits_per_color;
 
-	if (np && of_device_is_compatible(np, "altr,vip-frame-buffer-2.0")) {
-	    fbdev->altr_vip_version = 2;
-	} else {
-	    fbdev->altr_vip_version = 1;
-	}
-	
-	ret = of_property_read_u32(np, fbdev->altr_vip_version == 2 ? "altr,max-width" : "max-width", &fbdev->info.var.xres);
+	ret = of_property_read_u32(np, "max-width", &fbdev->info.var.xres);
 	if (ret) {
 		dev_err(&fbdev->pdev->dev,
 			"Missing required parameter 'max-width'");
@@ -114,7 +95,7 @@ static int altvipfb_of_setup(struct altvipfb_dev *fbdev)
 	}
 	fbdev->info.var.xres_virtual = fbdev->info.var.xres,
 
-	ret = of_property_read_u32(np, fbdev->altr_vip_version == 2 ? "altr,max-height" : "max-height", &fbdev->info.var.yres);
+	ret = of_property_read_u32(np, "max-height", &fbdev->info.var.yres);
 	if (ret) {
 		dev_err(&fbdev->pdev->dev,
 			"Missing required parameter 'max-height'");
@@ -122,7 +103,7 @@ static int altvipfb_of_setup(struct altvipfb_dev *fbdev)
 	}
 	fbdev->info.var.yres_virtual = fbdev->info.var.yres;
 
-	ret = of_property_read_u32(np, fbdev->altr_vip_version == 2 ? "altr,bits-per-symbol" : "bits-per-color", &bits_per_color);
+	ret = of_property_read_u32(np, "bits-per-color", &bits_per_color);
 	if (ret) {
 		dev_err(&fbdev->pdev->dev,
 			"Missing required parameter 'bits-per-color'");
@@ -136,7 +117,7 @@ static int altvipfb_of_setup(struct altvipfb_dev *fbdev)
 	}
 	fbdev->info.var.bits_per_pixel = 32;
 
-	ret = of_property_read_u32(np, fbdev->altr_vip_version == 2 ? "altr,mem-port-width" : "mem-word-width",
+	ret = of_property_read_u32(np, "mem-word-width",
 				   &fbdev->mem_word_width);
 	if (ret) {
 		dev_err(&fbdev->pdev->dev,
@@ -155,39 +136,20 @@ static int altvipfb_of_setup(struct altvipfb_dev *fbdev)
 
 static void altvipfb_start_hw(struct altvipfb_dev *fbdev)
 {
-	if (0) {
-	    writel(fbdev->info.fix.smem_start, fbdev->base +
-		ALTVIPFB_FRAME0_BASE_ADDRESS);
-	    writel(fbdev->info.var.xres * fbdev->info.var.yres /
+	writel(fbdev->info.fix.smem_start, fbdev->base +
+	       ALTVIPFB_FRAME0_BASE_ADDRESS);
+	writel(fbdev->info.var.xres * fbdev->info.var.yres /
 	       (fbdev->mem_word_width/32),
 	       fbdev->base + ALTVIPFB_FRAME0_NUM_WORDS);
-	    writel(fbdev->info.var.xres * fbdev->info.var.yres,
+	writel(fbdev->info.var.xres * fbdev->info.var.yres,
 	       fbdev->base + ALTVIPFB_FRAME0_SAMPLES);
-	    writel(fbdev->info.var.xres, fbdev->base + ALTVIPFB_FRAME0_WIDTH);
-	    writel(fbdev->info.var.yres, fbdev->base + ALTVIPFB_FRAME0_HEIGHT);
-	    writel(3, fbdev->base + ALTVIPFB_FRAME0_INTERLACED);
-	    writel(0, fbdev->base + ALTVIPFB_FRAME_SELECT);
+	writel(fbdev->info.var.xres, fbdev->base + ALTVIPFB_FRAME0_WIDTH);
+	writel(fbdev->info.var.yres, fbdev->base + ALTVIPFB_FRAME0_HEIGHT);
+	writel(3, fbdev->base + ALTVIPFB_FRAME0_INTERLACED);
+	writel(0, fbdev->base + ALTVIPFB_FRAME_SELECT);
 
-	    /* Finally set the control register to 1 to start streaming */
-	    writel(1, fbdev->base + ALTVIPFB_CONTROL);
-	} else {
-	    /*
-	    * The frameinfo variable has to correspond to the size of the VIP Suite
-	    * Frame Reader register 7 which will determine the maximum size used
-	    * in this frameinfo
-	    */
-	    #if 0
-	    // something bad here, check it later
-	    u32 frameinfo = readl(fbdev->base +
-				ALTVIPFB2_FRAME_READER) & 0x00ffffff;
-
-	    writel(frameinfo, fbdev->base + ALTVIPFB2_FRAME_INFO);
-	    #endif
-	    
-	    writel(fbdev->info.fix.smem_start, fbdev->base + ALTVIPFB2_FRAME_START);
-	    /* Finally set the control register to 1 to start streaming */
-	    writel(1, fbdev->base + ALTVIPFB2_CONTROL);
-	}
+	/* Finally set the control register to 1 to start streaming */
+	writel(1, fbdev->base + ALTVIPFB_CONTROL);
 }
 
 static void altvipfb_disable_hw(struct altvipfb_dev *fbdev)
@@ -321,7 +283,6 @@ static int altvipfb_remove(struct platform_device *dev)
 static struct of_device_id altvipfb_match[] = {
 	{ .compatible = "altr,vip-frame-reader-1.0" },
 	{ .compatible = "altr,vip-frame-reader-9.1" },
-	{ .compatible = "altr,vip-frame-buffer-2.0" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, altvipfb_match);

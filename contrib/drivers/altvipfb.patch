@@ -1,6 +1,6 @@
---- Kconfig	2017-11-15 12:09:19.000000000 +0300
-+++ a/drivers/video/fbdev/Kconfig	2017-11-11 17:54:12.158415692 +0300
-@@ -236,6 +236,16 @@
+--- a/drivers/video/fbdev/Kconfig	2018-10-20 10:48:54.000000000 +0300
++++ b/drivers/video/fbdev/Kconfig	2018-12-06 21:49:54.518479333 +0300
+@@ -236,6 +236,38 @@
  comment "Frame buffer hardware drivers"
  	depends on FB
  
@@ -11,19 +11,44 @@
 +	select FB_CFB_COPYAREA
 +	select FB_CFB_IMAGEBLIT
 +	help
-+	    This driver supports the Altera Video and Image Processing(VIP)
-+	    Frame Reader
++	  This driver supports the Altera Video and Image Processing(VIP)
++	  Frame Reader
++
++config FB_ALTERA_VIP_FB2
++    tristate "Altera VIP Frame Buffer II framebuffer support"
++	depends on FB
++    select FB_CFB_FILLRECT
++    select FB_CFB_COPYAREA
++    select FB_CFB_IMAGEBLIT
++	---help---
++     This driver supports the Altera Video and Image Processing(VIP)
++     Frame Buffer II. This core driver only supports Arria 10 HW and newer
++	 families of FPGA
++
++config FB_ALTERA_VIP_FB2_PLAT
++	tristate "Altera VIP Frame Buffer II framebuffer support OF Device"
++	depends on FB && OF
++	select FB_CFB_FILLRECT
++	select FB_CFB_COPYAREA
++	select FB_CFB_IMAGEBLIT
++    ---help---
++     This driver supports the Altera Video and Image Processing(VIP)
++     Frame Buffer II. This driver only supports Arria 10 HW
++     and newer families of FPGA on the OF Device
 +
  config FB_GRVGA
  	tristate "Aeroflex Gaisler framebuffer support"
  	depends on FB && SPARC
---- Makefile	2017-11-15 12:09:19.000000000 +0300
-+++ a/drivers/video/fbdev/Makefile	2017-11-12 14:00:19.696327978 +0300
-@@ -19,6 +19,7 @@
- obj-$(CONFIG_FB_PM2)              += pm2fb.o
- obj-$(CONFIG_FB_PM3)		  += pm3fb.o
+--- a/drivers/video/fbdev/Makefile	2018-10-20 10:48:54.000000000 +0300
++++ b/drivers/video/fbdev/Makefile	2018-12-06 21:49:54.518479333 +0300
+@@ -11,6 +11,10 @@
+ obj-$(CONFIG_FB_WMT_GE_ROPS)   += wmt_ge_rops.o
  
+ # Hardware specific drivers go first
 +obj-$(CONFIG_FB_ALTERA_VIP)	  += altvipfb.o
- obj-$(CONFIG_FB_I740)		  += i740fb.o
- obj-$(CONFIG_FB_MATROX)		  += matrox/
- obj-$(CONFIG_FB_RIVA)		  += riva/
++obj-$(CONFIG_FB_ALTERA_VIP_FB2) += altvipfb2.o
++obj-$(CONFIG_FB_ALTERA_VIP_FB2_PLAT) += altvipfb2_drv.o
++altvipfb2_drv-objs := altvipfb2-plat.o altvipfb2.o
+ obj-$(CONFIG_FB_AMIGA)            += amifb.o c2p_planar.o
+ obj-$(CONFIG_FB_ARC)              += arcfb.o
+ obj-$(CONFIG_FB_CLPS711X)	  += clps711x-fb.o
