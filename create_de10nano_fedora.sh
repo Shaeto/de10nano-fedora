@@ -148,13 +148,14 @@ soc_system_dir="$DIR/soc_system"
 
 uboot_src_dir="$WORKSPACE/sw/hps/u-boot"
 uboot_src_git_repo="git://git.denx.de/u-boot.git"
-uboot_src_git_checkout_commit="master"
+# u-boot v2018.11
+uboot_src_git_checkout_commit="0157013f4a4945bbdb70bb4d98d680e0845fd784"
 uboot_src_make_config_file="socfpga_de10_nano_defconfig"
 uboot_script_file="${uboot_src_dir}/u-boot.script"
 uboot_img_file="${uboot_src_dir}/u-boot-with-spl.sfp"
 
 linux_dir="$WORKSPACE/sw/hps/linux"
-linux_rt_version="4.14.78-rt47"
+linux_rt_version="4.19.10-rt8"
 linux_src_version=$(echo "$linux_rt_version" | sed "s/\-.*$//")
 linux_src_dir="${linux_dir}/linux-${linux_src_version}"
 
@@ -164,9 +165,9 @@ linux_src_crc="sha256sums.asc"
 linux_src_crc_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_crc}"
 
 linux_rt_patch="patch-${linux_rt_version}.patch.xz"
-linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/older/${linux_rt_patch}"
+linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.19/older/${linux_rt_patch}"
 linux_rt_patch_crc="sha256sums.asc"
-linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.14/older/${linux_rt_patch_crc}"
+linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.19/older/${linux_rt_patch_crc}"
 
 linux_src_make_config_file="socfpga_de10nano_defconfig"
 linux_src_make_config_file_path="$DIR/contrib/${linux_src_make_config_file}"
@@ -334,6 +335,7 @@ function prepare_media_files() {
     echo "Copying content of the FAT32 volume to ${sdcard_fat32_dir}"
     rm -rf "${sdcard_fat32_dir}"/*
     cp -Rf "${image_mnt_dir}"/* "${sdcard_fat32_dir}/"
+    prep_fat32_uuid=$(blkid -s UUID -o value "${mount_dev}")
     umount "${image_mnt_dir}"
     losetup -d "${mount_dev}"
 
@@ -368,7 +370,7 @@ function prepare_media_files() {
         losetup -d "${mount_dev}"
     fi
 
-    echo -en "boot volume uuid=$prep_boot_uuid\nroot volume uuid=$prep_root_uuid\n"
+    echo -en "efi volume uuid=$prep_fat32_uuid boot volume uuid=$prep_boot_uuid\nroot volume uuid=$prep_root_uuid\n"
     if [ "$prep_swap_uuid" ]; then
         echo "swap volume uuid=$prep_swap_uuid"
     fi
@@ -383,6 +385,7 @@ function prepare_media_files() {
         echo "swap.size=$((${prep_swap_size} * ${prep_sector_size}))" >>"${sdcard_volumes_info}"
     fi
     echo "fat32.size=$(($prep_fat32_size * ${prep_sector_size}))" >>"${sdcard_volumes_info}"
+    echo "fat32.uuid=$prep_fat32_uuid" >>"${sdcard_volumes_info}"
 
     # turn off selinux
     if [ "$SELINUX" != "" ]; then
@@ -615,23 +618,18 @@ setenv HDMI_enable_dvi "no"
 setenv hdmi_fdt_mod '\
 fdt addr \${fdtaddr}; \
 fdt resize; \
-fdt mknode /soc framebuffer@3F000000; \
-setenv fdt_frag /soc/framebuffer@3F000000; \
-fdt set \${fdt_frag} compatible "simple-framebuffer"; \
-fdt set \${fdt_frag} reg <0x3F000000 8294400>; \
-fdt set \${fdt_frag} format "x8r8g8b8"; \
+setenv fdt_frag /soc/framebuffer@100008000; \
 fdt set \${fdt_frag} width <\${HDMI_h_active_pix}>; \
 fdt set \${fdt_frag} height <\${HDMI_v_active_lin}>; \
-fdt set \${fdt_frag} stride <\${HDMI_stride}>; \
-fdt set /soc stdout-path "display0"; \
-fdt set /aliases display0 "/soc/framebuffer@3F000000"; \
+fdt set \${fdt_frag} max-width <\${HDMI_h_active_pix}>; \
+fdt set \${fdt_frag} max-height <\${HDMI_v_active_lin}>; \
 sleep 2;'
 
 setenv hdmi_cfg '\
 i2c dev 2; \
 load mmc 0:\${mmcload_fat32_part} 0x0c300000 STARTUP.BMP; \
 load mmc 0:\${mmcload_fat32_part} 0x0c100000 de10_nano_hdmi_config.bin; \
-go 0x0C100001; \
+go 0x0C100001 2; \
 dcache flush; \
 if test "\${HDMI_enable_dvi}" = "yes"; then \
 i2c mw 0x39 0xAF 0x04 0x01; \
@@ -640,12 +638,12 @@ fi;'
 setenv hdmi_dump_regs '\
 i2c dev 2; icache flush; \
 load mmc 0:1 0x0c100000 dump_adv7513_regs.bin; \
-go 0x0C100001; icache flush;'
+go 0x0C100001 2; icache flush;'
 
 setenv hdmi_dump_edid '\
 i2c dev 2; icache flush; \
 load mmc 0:1 0x0c100000 dump_adv7513_edid.bin; \
-go 0x0C100001; icache flush;'
+go 0x0C100001 2; icache flush;'
 
 # standard input/output
 setenv stderr serial
@@ -695,7 +693,7 @@ fi;
 load mmc 0:\${mmcload_fat32_part} \${loadaddr} \${bootimage};
 
 # set kernel boot arguments, then boot the kernel
-setenv bootargs mem=${linux_kernel_mem_arg} console=ttyS0,115200 earlyprintk uio_pdrv_genirq.of_id=generic-uio root=\${mmcroot} rw rootwait;
+setenv bootargs mem=${linux_kernel_mem_arg} console=ttyS0,115200n8 earlyprintk uio_pdrv_genirq.of_id=generic-uio root=\${mmcroot} rw rootwait;
 bootm \${loadaddr} - \${fdtaddr};
 EOF
 
@@ -708,20 +706,10 @@ EOF
     cp "${uboot_img_file}" "${sdcard_a2_preloader_bin_file}"
 
     if [ $INIT_HDMI -ne 0 ]; then
-        if [ -f "$DIR/contrib/de10_nano_hdmi_config.bin" ]; then
-            cp -f "$DIR/contrib/de10_nano_hdmi_config.bin" "${sdcard_fat32_dir}"
-        fi
-        if [ -f "$DIR/contrib/STARTUP.BMP" ]; then
-            cp -f "$DIR/contrib/STARTUP.BMP" "${sdcard_fat32_dir}"
-        fi
-
-        # actually dump_adv7513_edid.bin and dump_adv7513_regs.bin not required
-        if [ -f "$DIR/contrib/dump_adv7513_regs.bin" ]; then
-            cp -f "$DIR/contrib/dump_adv7513_regs.bin" "${sdcard_fat32_dir}"
-        fi
-        if [ -f "$DIR/contrib/dump_adv7513_edid.bin" ]; then
-            cp -f "$DIR/contrib/dump_adv7513_edid.bin" "${sdcard_fat32_dir}"
-        fi
+        cp -f "$DIR/contrib/de10_nano_hdmi_config.bin" "${sdcard_fat32_dir}"
+        cp -f "$DIR/contrib/dump_adv7513_edid.bin" "${sdcard_fat32_dir}"
+        cp -f "$DIR/contrib/dump_adv7513_regs.bin" "${sdcard_fat32_dir}"
+        cp -f "$DIR/contrib/STARTUP.BMP" "${sdcard_fat32_dir}"
     fi
 
     if [ "$SOC_RBF" ]; then
@@ -782,6 +770,7 @@ function partition_media() {
     fi
 
     part_file_fat32_size=$(grep "fat32\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
+    part_file_fat32_uuid=$(grep "fat32\.uuid" "${sdcard_volumes_info}" | sed -e "s/.*=\([[:alnum:]-]\+\)$/\1/" | sed -e "s/-//g" )
     part_file_boot_size=$(grep "boot\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
     part_file_boot_uuid=$(grep "boot\.uuid" "${sdcard_volumes_info}" | sed -e "s/.*=\([[:alnum:]-]\+\)$/\1/")
     part_file_root_size=$(grep "root\.size" "${sdcard_volumes_info}" | sed -e "s/.*=\([0-9]\+\)$/\1/")
@@ -867,7 +856,7 @@ function partition_media() {
 
         echo "Formatting FAT32"
         mount_dev=$(losetup --show -o $(($prep_fat32_start * ${prep_sector_size})) --sizelimit $(($prep_fat32_size * ${prep_sector_size})) -f "${sdcard_dev}")
-        mkfs -t vfat "${mount_dev}" >/dev/null
+        mkfs -t vfat -i "${part_file_fat32_uuid}" "${mount_dev}" >/dev/null
         echo "Transferring data from ${sdcard_fat32_dir}"
         mount -t vfat "${mount_dev}" "${image_mnt_dir}"
         cp -a "${sdcard_fat32_dir}"/* "${image_mnt_dir}"
@@ -914,7 +903,7 @@ function partition_media() {
     else
         mount_dev="${sdcard_dev_fat32}"
         echo "Formatting FAT32 partition ${mount_dev}"
-        mkfs -t vfat "${mount_dev}" >/dev/null
+        mkfs -t vfat -i "${part_file_fat32_uuid}" "${mount_dev}" >/dev/null
         echo "Transferring data from ${sdcard_fat32_dir}"
         mount -t vfat "${mount_dev}" "${image_mnt_dir}"
         cp -a "${sdcard_fat32_dir}"/* "${image_mnt_dir}"

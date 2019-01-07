@@ -1,0 +1,91 @@
+diff --git a/arch/arm/dts/socfpga_cyclone5_de10_nano.dts b/arch/arm/dts/socfpga_cyclone5_de10_nano.dts
+index d4dd9e9bca..6478461209 100644
+--- a/arch/arm/dts/socfpga_cyclone5_de10_nano.dts
++++ b/arch/arm/dts/socfpga_cyclone5_de10_nano.dts
+@@ -58,6 +58,22 @@
+ 	status = "okay";
+ };
+ 
++&i2c0 {
++	status = "okay";
++};
++
++&i2c1 {
++	status = "okay";
++};
++
++&i2c2 {
++	status = "okay";
++};
++
++&i2c3 {
++	status = "okay";
++};
++
+ &mmc0 {
+ 	status = "okay";
+ 	u-boot,dm-pre-reloc;
+diff --git a/examples/standalone/Makefile b/examples/standalone/Makefile
+index 09364d84a0..7ba846f455 100644
+--- a/examples/standalone/Makefile
++++ b/examples/standalone/Makefile
+@@ -1,9 +1,11 @@
+-# SPDX-License-Identifier: GPL-2.0+
+ #
+ # (C) Copyright 2000-2006
+ # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
++#
++# SPDX-License-Identifier:	GPL-2.0+
++#
+ 
+-extra-y        := hello_world
++extra-y        := hello_world de10_nano_hdmi_config dump_adv7513_edid dump_adv7513_regs
+ extra-$(CONFIG_SMC91111)           += smc91111_eeprom
+ extra-$(CONFIG_SMC911X)            += smc911x_eeprom
+ extra-$(CONFIG_SPI_FLASH_ATMEL)    += atmel_df_pow2
+@@ -43,7 +45,7 @@ endif
+ # We don't want gcc reordering functions if possible.  This ensures that an
+ # application's entry point will be the first function in the application's
+ # source file.
+-ccflags-y += $(call cc-option,-fno-toplevel-reorder)
++ccflags-y += $(call cc-option,-fno-toplevel-reorder) -O0 -g2
+ 
+ #########################################################################
+ 
+diff --git a/include/_exports.h b/include/_exports.h
+index 5416041243..6760cb599d 100644
+--- a/include/_exports.h
++++ b/include/_exports.h
+@@ -49,6 +49,14 @@
+ 	EXPORT_FUNC(dummy, void, i2c_read, void)
+ #endif
+ 
++#if defined(CONFIG_CMD_I2C) && defined(CONFIG_DM_I2C)
++	EXPORT_FUNC(i2c_get_chip, int, i2c_get_chip, struct udevice *, uint, uint, struct udevice **)
++	EXPORT_FUNC(i2c_set_chip_offset_len, int, i2c_set_chip_offset_len, struct udevice *, uint offset)
++	EXPORT_FUNC(uclass_get_device_by_seq, int, uclass_get_device_by_seq, enum uclass_id, int, struct udevice **)
++	EXPORT_FUNC(dm_i2c_write, int, dm_i2c_write, struct udevice *, uint, const uint8_t * , int)
++	EXPORT_FUNC(dm_i2c_read, int, dm_i2c_read, struct udevice *, uint, uint8_t * , int)
++#endif
++
+ #if !defined(CONFIG_CMD_SPI) || defined(CONFIG_DM_SPI)
+ 	EXPORT_FUNC(dummy, void, spi_init, void)
+ 	EXPORT_FUNC(dummy, void, spi_setup_slave, void)
+diff --git a/include/exports.h b/include/exports.h
+index a4b862f191..b811f18979 100644
+--- a/include/exports.h
++++ b/include/exports.h
+@@ -37,6 +37,13 @@ unsigned long long ustrtoull(const char *cp, char **endp, unsigned int base);
+ int i2c_write (uchar, uint, int , uchar* , int);
+ int i2c_read (uchar, uint, int , uchar* , int);
+ #endif
++#if defined(CONFIG_CMD_I2C) && defined(CONFIG_DM_I2C)
++int uclass_get_device_by_seq(enum uclass_id, int, struct udevice **);
++int i2c_get_chip(struct udevice *, uint, uint, struct udevice **);
++int i2c_set_chip_offset_len(struct udevice *, uint);
++int dm_i2c_write (struct udevice *, uint, const uint8_t* , int);
++int dm_i2c_read (struct udevice *, uint, uint8_t* , int);
++#endif
+ #ifdef CONFIG_PHY_AQUANTIA
+ struct mii_dev *mdio_get_current_dev(void);
+ struct phy_device *phy_find_by_mask(struct mii_dev *bus, unsigned phy_mask,

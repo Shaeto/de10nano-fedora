@@ -135,6 +135,7 @@ struct pll_calc_struct {
 
 /* ADV7513 component */
 #define I2C_BUS "/dev/i2c-1"
+#define ADV7513_I2C_DEFAULT_BUS_NUMBER (2)
 #define ADV7513_MAIN_ADDR       (0x39)
 #define ADV7513_EDID_ADDR       (0x3F)
 #define ADV7513_CHIP_ID_HI      (0xF5)

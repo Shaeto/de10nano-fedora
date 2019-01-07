@@ -68,6 +68,7 @@ static struct fb_ops altvipfb2_ops = {
 
 static void altvipfb2_start_hw(void __iomem *base, struct fb_info *info)
 {
+#if 0
 	/*
 	 * The frameinfo variable has to correspond to the size of the VIP Suite
 	 * Frame Reader register 7 which will determine the maximum size used
@@ -77,7 +78,7 @@ static void altvipfb2_start_hw(void __iomem *base, struct fb_info *info)
 		readl(base + ALTVIPFB2_FRAME_READER) & 0x00ffffff;
 
 	writel(frameinfo, base + ALTVIPFB2_FRAME_INFO);
-
+#endif
 	writel(info->fix.smem_start, base + ALTVIPFB2_FRAME_START);
 	/* Finally set the control register to 1 to start streaming */
 	writel(1, base + ALTVIPFB2_CONTROL);

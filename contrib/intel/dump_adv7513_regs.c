@@ -24,6 +24,7 @@
 #include <common.h>
 #include <exports.h>
 #include "de10_nano_hdmi_config.h"
+#include "de10_nano_hdmi_i2c.h"
 
 struct adv7513_regs {
 	u_char addr;
@@ -68,11 +69,17 @@ int dump_adv7513_regs(int argc, char * const argv[]) {
 	/* initialize u-boot application environment */
 	app_startup(argv);
 
+	if (argc >= 2 && argv[1] && argv[1][0]) {
+	    char *endp;
+	    unsigned int mybus = ustrtoul(argv[1], &endp, 10);
+	    hdmi_i2c_set_bus_num(mybus);
+	}
+
 	/* since we cannot read a single register from the ADV7513 with the
 	 * default I2C driver, we just read the first N registers starting
 	 * from ZERO and reaching up to the register we want
 	 */
-	result = i2c_read(
+	result = hdmi_i2c_read(
 			ADV7513_MAIN_ADDR,	// uint8_t chip
 			0x00,			// unsigned int addr
 			0,			// int alen
@@ -127,3 +134,4 @@ int dump_adv7513_regs(int argc, char * const argv[]) {
 	return (0);
 }
 
+#include "de10_nano_hdmi_i2c.c"
