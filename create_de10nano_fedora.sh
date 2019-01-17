@@ -151,7 +151,7 @@ uboot_src_url="https://github.com/u-boot/u-boot/archive/${uboot_src_git_release_
 uboot_src_workspace="$WORKSPACE/sw/hps"
 uboot_src_file="${uboot_src_workspace}/${uboot_src_git_release_tag}.tar.gz"
 uboot_src_dir="${uboot_src_workspace}/u-boot-${uboot_src_git_release_tag}"
-uboot_src_patch="$DIR/contrib/uboot/uboot_v2019.01.patch"
+uboot_src_patch="$DIR/contrib/uboot/uboot_v2018_11.patch"
 uboot_src_make_config_file="socfpga_de10_nano_defconfig"
 
 uboot_script_file="${uboot_src_dir}/u-boot.script"
