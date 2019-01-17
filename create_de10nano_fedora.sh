@@ -146,33 +146,25 @@ quartus_project_name="mksocfpga"
 
 soc_system_dir="$DIR/soc_system"
 
-uboot_src_dir="$WORKSPACE/sw/hps/u-boot"
-uboot_src_git_repo="git://git.denx.de/u-boot.git"
-# u-boot v2018.11
-uboot_src_git_checkout_commit="0157013f4a4945bbdb70bb4d98d680e0845fd784"
+uboot_src_git_release_tag="v2018.11"
+uboot_src_url="https://github.com/u-boot/u-boot/archive/${uboot_src_git_release_tag}.tar.gz"
+uboot_src_workspace="$WORKSPACE/sw/hps"
+uboot_src_file="${uboot_src_workspace}/${uboot_src_git_release_tag}.tar.gz"
+uboot_src_dir="${uboot_src_workspace}/u-boot-${uboot_src_git_release_tag}"
+uboot_src_patch="$DIR/contrib/uboot/uboot_v2019.01.patch"
 uboot_src_make_config_file="socfpga_de10_nano_defconfig"
+
 uboot_script_file="${uboot_src_dir}/u-boot.script"
 uboot_img_file="${uboot_src_dir}/u-boot-with-spl.sfp"
 
-linux_dir="$WORKSPACE/sw/hps/linux"
-linux_rt_version="4.19.10-rt8"
-linux_src_version=$(echo "$linux_rt_version" | sed "s/\-.*$//")
-linux_src_dir="${linux_dir}/linux-${linux_src_version}"
-
-linux_src_file="linux-${linux_src_version}.tar.xz"
-linux_src_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_file}"
-linux_src_crc="sha256sums.asc"
-linux_src_crc_url="https://www.kernel.org/pub/linux/kernel/v4.x/${linux_src_crc}"
-
-linux_rt_patch="patch-${linux_rt_version}.patch.xz"
-linux_rt_patch_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.19/older/${linux_rt_patch}"
-linux_rt_patch_crc="sha256sums.asc"
-linux_rt_patch_crc_url="https://www.kernel.org/pub/linux/kernel/projects/rt/4.19/older/${linux_rt_patch_crc}"
-
+linux_src_git_release_tag="rel_socfpga-4.14.73-ltsi-rt_19.01.01_pr"
+linux_src_url="https://github.com/altera-opensource/linux-socfpga/archive/${uboot_src_git_release_tag}.tar.gz"
+linux_src_workspace="$WORKSPACE/sw/hps"
+linux_src_file="${linux_src_workspace}/${linux_src_git_release_tag}.tar.gz"
+linux_src_dir="${linux_src_workspace}/linux-${linux_src_git_release_tag}"
+linux_src_patch="$DIR/contrib/linux/rel_socfpga-4.14.73-ltsi-rt_19.01.01_pr.patch"
 linux_src_make_config_file="socfpga_de10nano_defconfig"
-linux_src_make_config_file_path="$DIR/contrib/${linux_src_make_config_file}"
-linux_src_altvipfb2_driver_paths="$DIR/contrib/drivers/altvipfb.c $DIR/contrib/drivers/altvipfb2.c $DIR/contrib/drivers/altvipfb2-plat.c $DIR/contrib/drivers/altvipfb2.h"
-linux_src_altvipfb2_config_patch_path="$DIR/contrib/drivers/altvipfb.patch"
+
 linux_kernel_mem_arg="1024M"
 linux_uImage_file="${linux_src_dir}/arch/arm/boot/uImage"
 linux_dtb_file="${linux_src_dir}/arch/arm/boot/dts/socfpga_cyclone5_de10_nano.dtb"
@@ -420,75 +412,18 @@ function prepare_media_files() {
 # compile_linux() ##############################################################
 function compile_linux() {
     # if linux source tree doesn't exist, then download it
-    if [ $PREEMPT_RT -ne 0 ]; then
-        if [ -d "${linux_src_dir}" -a ! -f "${linux_src_dir}/.de10nano_rt" ]; then
-            echo "Removing ${linux_src_dir}"
-            rm -rf "${linux_src_dir}"
-        fi
-    else
-        if [ -d "${linux_src_dir}" -a ! -f "${linux_src_dir}/.de10nano" ]; then
-            echo "Removing ${linux_src_dir}"
-            rm -rf "${linux_src_dir}"
-        fi
+    if [ ! -d "${linux_src_workspace}" ] ; then
+        mkdir -p "${linux_src_workspace}"
     fi
-
     if [ ! -d "${linux_src_dir}" ]; then
-        echo "downloading ${linux_src_crc} from ${linux_src_crc_url} for ${linux_src_file}"
-        curl -sL "${linux_src_crc_url}" | grep "${linux_src_file}" > "${linux_dir}/${linux_src_crc}.kernel"
-        if [ ! -f "${linux_dir}/${linux_src_file}" ]; then
-            echo "downloading ${linux_src_url}"
-            curl -L -o "${linux_dir}/${linux_src_file}" "${linux_src_url}"
+        if [ ! -f "${linux_src_file}" ] ; then
+            echo "Downloading linux from ${linux_src_url}"
+            curl -L -o "${linux_src_file}" "${linux_src_url}"
         fi
-        echo "validating linux kernel source file ${linux_dir}/${linux_src_file}"
-        pushd "${linux_dir}"
-        local sharc=$(sha256sum --status -c "${linux_dir}/${linux_src_crc}.kernel" || echo "invalid")
-        if [ "$sharc" = "invalid" ]; then
-            echo "${linux_dir}/${linux_src_file} is broken please delete it and start script again"
-            exit 255
-        fi
-        xz -d -c "${linux_dir}/${linux_src_file}" | tar -xf -
-        popd
-        if [ $PREEMPT_RT -ne 0 ]; then
-            echo "downloading ${linux_rt_patch_crc} from ${linux_rt_patch_crc_url}"
-            curl -sL "${linux_rt_patch_crc_url}" | grep "${linux_rt_patch}" >"${linux_dir}/${linux_rt_patch_crc}.rt-patch"
-
-            if [ ! -f "${linux_dir}/${linux_rt_patch}" ]; then
-                echo "downloading ${linux_rt_patch_url}"
-                curl -L "${linux_rt_patch_url}" >"${linux_dir}/${linux_rt_patch}"
-            fi
-            echo "validating kernel rt-preempt patch file ${linux_dir}/${linux_rt_patch}"
-            pushd "${linux_dir}"
-            sha256sum --status -c "${linux_dir}/${linux_rt_patch_crc}.rt-patch"
-            if [ $? -ne 0 ]; then
-                echo "${linux_dir}/${linux_rt_patch} is broken please delete it and start script again"
-                exit 255
-            fi
-            xz -d -c "${linux_dir}/${linux_rt_patch}" | patch -d "${linux_src_dir}" -p1
-            popd
-        fi
-	for fb in ${linux_src_altvipfb2_driver_paths}
-        do
-          cp -f $fb "${linux_src_dir}/drivers/video/fbdev/"
-        done
-        patch -d "${linux_src_dir}" -p1 <"${linux_src_altvipfb2_config_patch_path}"
-        cp -f "${linux_dtb_file_src_path}" "${linux_src_dir}/arch/arm/boot/dts/"
-        patch -d "${linux_src_dir}" -p1 <"${linux_dtb_file_patch_path}"
-
-        if [ $PREEMPT_RT -ne 0 ]; then
-            touch "${linux_src_dir}/.de10nano_rt"
-        else
-            touch "${linux_src_dir}/.de10nano"
-        fi
-    fi
-    
-    if [ ! -f "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")" \
-	-o "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")" -ot "${linux_src_make_config_file_path}" ] ; then
-        cp -f "${linux_src_make_config_file_path}" "${linux_src_dir}/arch/arm/configs/"
-
-        if [ $PREEMPT_RT -ne 0 ]; then
-            echo -e "CONFIG_PREEMPT=y\nCONFIG_PREEMPT_RT=y\nCONFIG_PREEMPT_RT_FULL=y\n" >> "${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
-        fi
-        echo -e "CONFIG_LOCALVERSION=\"-soc\"\nCONFIG_LOCALVERSION_AUTO=n" >>"${linux_src_dir}/arch/arm/configs/$(basename "${linux_src_make_config_file_path}")"
+        mkdir -p "${linux_src_dir}"
+        echo "Untaring Linux"
+        tar -xzf "${linux_src_file}" -C "${linux_src_dir}" --strip-components 1
+        patch -d "${linux_src_dir}" -p1 < "${linux_src_patch}"
     fi
 
     # change working directory to linux source tree directory
@@ -547,8 +482,18 @@ function compile_uboot() {
         "${sdcard_fat32_uboot_img_file}"
 
     # if uboot source tree doesn't exist, then download it
+    if [ ! -d "${uboot_src_workspace}" ] ; then
+        mkdir -p "${uboot_src_workspace}"
+    fi
     if [ ! -d "${uboot_src_dir}" ]; then
-        git clone "${uboot_src_git_repo}" "${uboot_src_dir}"
+        if [ ! -f "${uboot_src_file}" ] ; then
+            echo "Downloading U-Boot from ${uboot_src_url}"
+            curl -L -o "${uboot_src_file}" "${uboot_src_url}"
+        fi
+        mkdir -p "${uboot_src_dir}"
+        echo "Untaring U-Boot"
+        tar -xzf "${uboot_src_file}" -C "${uboot_src_dir}" --strip-components 1
+        patch -d "${uboot_src_dir}" -p1 < "${uboot_src_patch}"
     fi
 
     # change working directory to uboot source tree directory
@@ -559,9 +504,6 @@ function compile_uboot() {
 
     # clean up source tree
     make distclean
-
-    # checkout the following commit (tested and working):
-    git checkout "${uboot_src_git_checkout_commit}"
 
     # configure uboot for socfpga_cyclone5 architecture
     make "${uboot_src_make_config_file}"
@@ -618,11 +560,9 @@ setenv HDMI_enable_dvi "no"
 setenv hdmi_fdt_mod '\
 fdt addr \${fdtaddr}; \
 fdt resize; \
-setenv fdt_frag /soc/framebuffer@100008000; \
-fdt set \${fdt_frag} width <\${HDMI_h_active_pix}>; \
-fdt set \${fdt_frag} height <\${HDMI_v_active_lin}>; \
-fdt set \${fdt_frag} max-width <\${HDMI_h_active_pix}>; \
-fdt set \${fdt_frag} max-height <\${HDMI_v_active_lin}>; \
+setenv fdt_frag /soc/bridge@c0000000/framebuffer@100008000; \
+fdt set \${fdt_frag} altr,max-width <\${HDMI_h_active_pix}>; \
+fdt set \${fdt_frag} altr,max-height <\${HDMI_v_active_lin}>; \
 sleep 2;'
 
 setenv hdmi_cfg '\
@@ -686,7 +626,7 @@ load mmc 0:\${mmcload_fat32_part} \${fdtaddr} \${fdtimage};
 # modify devicetree according to detected display mode
 if test "\${HDMI_status}" = "complete"; then
   echo "add simple frame buffer \${HDMI_h_active_pix}x\${HDMI_v_active_lin}"
-#  run hdmi_fdt_mod;
+  run hdmi_fdt_mod;
 fi;
 
 # load linux kernel image
@@ -706,9 +646,9 @@ EOF
     cp "${uboot_img_file}" "${sdcard_a2_preloader_bin_file}"
 
     if [ $INIT_HDMI -ne 0 ]; then
-        cp -f "$DIR/contrib/de10_nano_hdmi_config.bin" "${sdcard_fat32_dir}"
-        cp -f "$DIR/contrib/dump_adv7513_edid.bin" "${sdcard_fat32_dir}"
-        cp -f "$DIR/contrib/dump_adv7513_regs.bin" "${sdcard_fat32_dir}"
+        cp -f "${uboot_src_dir}/examples/standalone/de10_nano_hdmi_config.bin" "${sdcard_fat32_dir}"
+        cp -f "${uboot_src_dir}/examples/standalone/dump_adv7513_edid.bin" "${sdcard_fat32_dir}"
+        cp -f "${uboot_src_dir}/examples/standalone/dump_adv7513_regs.bin" "${sdcard_fat32_dir}"
         cp -f "$DIR/contrib/STARTUP.BMP" "${sdcard_fat32_dir}"
     fi
 

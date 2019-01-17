@@ -1,0 +1,367 @@
+--- a/drivers/video/fbdev/altvipfb2.c	2019-01-10 18:35:52.000000000 +0300
++++ b/drivers/video/fbdev/altvipfb2.c	2018-12-13 00:41:39.959282805 +0300
+@@ -68,6 +68,7 @@
+ 
+ static void altvipfb2_start_hw(void __iomem *base, struct fb_info *info)
+ {
++#if 0
+ 	/*
+ 	 * The frameinfo variable has to correspond to the size of the VIP Suite
+ 	 * Frame Reader register 7 which will determine the maximum size used
+@@ -77,7 +78,7 @@
+ 		readl(base + ALTVIPFB2_FRAME_READER) & 0x00ffffff;
+ 
+ 	writel(frameinfo, base + ALTVIPFB2_FRAME_INFO);
+-
++#endif
+ 	writel(info->fix.smem_start, base + ALTVIPFB2_FRAME_START);
+ 	/* Finally set the control register to 1 to start streaming */
+ 	writel(1, base + ALTVIPFB2_CONTROL);
+diff -ruN b/arch/arm/boot/dts/Makefile a/arch/arm/boot/dts/Makefile
+--- b/arch/arm/boot/dts/Makefile	2019-01-10 18:35:52.000000000 +0300
++++ a/arch/arm/boot/dts/Makefile	2019-01-17 14:23:43.011885662 +0300
+@@ -794,6 +794,7 @@
+ 	socfpga_cyclone5_mcvevk.dtb \
+ 	socfpga_cyclone5_socdk.dtb \
+ 	socfpga_cyclone5_de0_sockit.dtb \
++	socfpga_cyclone5_de10_nano.dtb \
+ 	socfpga_cyclone5_sockit.dtb \
+ 	socfpga_cyclone5_socrates.dtb \
+ 	socfpga_cyclone5_sodia.dtb \
+diff -ruN b/arch/arm/boot/dts/socfpga_cyclone5_de10_nano.dts a/arch/arm/boot/dts/socfpga_cyclone5_de10_nano.dts
+--- b/arch/arm/boot/dts/socfpga_cyclone5_de10_nano.dts	1970-01-01 03:00:00.000000000 +0300
++++ a/arch/arm/boot/dts/socfpga_cyclone5_de10_nano.dts	2017-12-01 18:14:26.461707074 +0300
+@@ -0,0 +1,97 @@
++/*
++ * Copyright (C) 2017, Intel Corporation
++ *
++ * based on socfpga_cyclone5_de0_nano_soc.dts
++ *
++ * SPDX-License-Identifier:	GPL-2.0+
++ */
++
++#include "socfpga_cyclone5.dtsi"
++
++/ {
++	model = "Terasic DE10-Nano";
++	compatible = "altr,socfpga-cyclone5", "altr,socfpga";
++
++	chosen {
++		bootargs = "console=ttyS0,115200";
++	};
++
++	aliases {
++		ethernet0 = &gmac1;
++		udc0 = &usb1;
++	};
++
++	memory {
++		name = "memory";
++		device_type = "memory";
++		reg = <0x0 0x40000000>; /* 1GB */
++	};
++
++        regulator_3_3v: 3-3-v-regulator {
++                compatible = "regulator-fixed";
++                regulator-name = "3.3V";
++                regulator-min-microvolt = <3300000>;
++                regulator-max-microvolt = <3300000>;
++        };
++
++        leds {
++                compatible = "gpio-leds";
++                hps0 {
++                        label = "hps_led0";
++                        gpios = <&portb 24 0>;
++                        linux,default-trigger = "heartbeat";
++                };
++        };
++
++	soc {
++		u-boot,dm-pre-reloc;
++	};
++};
++
++&gmac1 {
++	status = "okay";
++	phy-mode = "rgmii";
++
++	rxd0-skew-ps = <420>;
++	rxd1-skew-ps = <420>;
++	rxd2-skew-ps = <420>;
++	rxd3-skew-ps = <420>;
++	txen-skew-ps = <0>;
++	txc-skew-ps = <1860>;
++	rxdv-skew-ps = <420>;
++	rxc-skew-ps = <1680>;
++};
++
++&gpio0 {
++	status = "okay";
++};
++
++&gpio1 {
++	status = "okay";
++};
++
++&gpio2 {
++	status = "okay";
++};
++
++&i2c0 {
++        status = "okay";
++        clock-frequency = <100000>;
++                
++        adxl345: adxl345@0 {
++                compatible = "adi,adxl345";
++                reg = <0x53>;
++
++                interrupt-parent = <&portc>;
++                interrupts = <3 2>;
++        };
++};
++
++&mmc0 {
++	status = "okay";
++	u-boot,dm-pre-reloc;
++};
++
++&usb1 {
++	status = "okay";
++};
+diff -ruN b/arch/arm/configs/socfpga_de10nano_defconfig a/arch/arm/configs/socfpga_de10nano_defconfig
+--- b/arch/arm/configs/socfpga_de10nano_defconfig	1970-01-01 03:00:00.000000000 +0300
++++ a/arch/arm/configs/socfpga_de10nano_defconfig	2019-01-07 22:03:15.438402660 +0300
+@@ -0,0 +1,232 @@
++# DE10 NANO
++
++#########
++# experimental drivers and options
++CONFIG_FB_ALTERA_VIP=y
++#CONFIG_FB_ALTERA_VIP_FB2=n
++CONFIG_FB_ALTERA_VIP_FB2_PLAT=y
++#CONFIG_DRM_IVIP=y
++#CONFIG_DRM_IVIP_OF=y
++#########
++
++CONFIG_UIO=y
++CONFIG_UIO_PDRV=y
++CONFIG_UIO_PDRV_GENIRQ=y
++CONFIG_DMA_SHARED_BUFFER=y
++CONFIG_DRM=y
++CONFIG_FB=y
++CONFIG_I2C_ALGOBIT=y
++CONFIG_SYNC_FILE=y
++CONFIG_VT_HW_CONSOLE_BINDING=y
++CONFIG_DRM_BRIDGE=y
++CONFIG_DRM_FBDEV_EMULATION=y
++CONFIG_DRM_FBDEV_OVERALLOC 100
++CONFIG_DRM_I2C_ADV7511=y
++CONFIG_DRM_I2C_ADV7533=y
++CONFIG_DRM_KMS_FB_HELPER=y
++CONFIG_DRM_KMS_HELPER=y
++CONFIG_DRM_LOAD_EDID_FIRMWARE=y
++CONFIG_DRM_MIPI_DSI=y
++CONFIG_DRM_PANEL=y
++CONFIG_DRM_PANEL_BRIDGE=y
++CONFIG_FB_CFB_COPYAREA=y
++CONFIG_FB_CFB_FILLRECT=y
++CONFIG_FB_CFB_IMAGEBLIT=y
++CONFIG_FB_CMDLINE=y
++CONFIG_FB_DEFERRED_IO=y
++CONFIG_FB_NOTIFY=y
++CONFIG_FB_SIMPLE=y
++CONFIG_FB_SYS_COPYAREA=y
++CONFIG_FB_SYS_FILLRECT=y
++CONFIG_FB_SYS_FOPS=y
++CONFIG_FB_SYS_IMAGEBLIT=y
++CONFIG_FB_TILEBLITTING n
++CONFIG_FONT_8x16=y
++CONFIG_FONT_8x8=y
++CONFIG_FONT_SUPPORT=y
++CONFIG_FRAMEBUFFER_CONSOLE=y
++CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
++CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
++CONFIG_HDMI=y
++CONFIG_LOGO=y
++CONFIG_LOGO_LINUX_CLUT224=y
++CONFIG_LOGO_LINUX_MONO=y
++CONFIG_LOGO_LINUX_VGA16=y
++# --
++CONFIG_SYSVIPC=y
++CONFIG_HIGH_RES_TIMERS=y
++CONFIG_IKCONFIG=y
++CONFIG_IKCONFIG_PROC=y
++CONFIG_LOG_BUF_SHIFT=14
++CONFIG_CGROUPS=y
++CONFIG_CPUSETS=y
++CONFIG_NAMESPACES=y
++CONFIG_BLK_DEV_INITRD=y
++CONFIG_EMBEDDED=y
++CONFIG_PROFILING=y
++CONFIG_OPROFILE=y
++CONFIG_MODULES=y
++CONFIG_MODULE_UNLOAD=y
++CONFIG_LBDAF=y
++# CONFIG_BLK_DEV_BSG is not set
++# CONFIG_IOSCHED_DEADLINE is not set
++# CONFIG_IOSCHED_CFQ is not set
++CONFIG_ARCH_SOCFPGA=y
++CONFIG_ARM_THUMBEE=y
++CONFIG_PCI=y
++CONFIG_PCI_MSI=y
++CONFIG_PCIE_ALTERA=y
++CONFIG_PCIE_ALTERA_MSI=y
++CONFIG_SMP=y
++CONFIG_NR_CPUS=2
++CONFIG_AEABI=y
++CONFIG_HIGHMEM=y
++CONFIG_ZBOOT_ROM_TEXT=0x0
++CONFIG_ZBOOT_ROM_BSS=0x0
++CONFIG_VFP=y
++CONFIG_NEON=y
++CONFIG_NET=y
++CONFIG_PACKET=y
++CONFIG_UNIX=y
++CONFIG_NET_KEY=y
++CONFIG_NET_KEY_MIGRATE=y
++CONFIG_INET=y
++CONFIG_IP_MULTICAST=y
++CONFIG_IP_PNP=y
++CONFIG_IP_PNP_DHCP=y
++CONFIG_IP_PNP_BOOTP=y
++CONFIG_IP_PNP_RARP=y
++CONFIG_PPS=y
++CONFIG_NETWORK_PHY_TIMESTAMPING=y
++CONFIG_PTP_1588_CLOCK=y
++CONFIG_VLAN_8021Q=y
++CONFIG_VLAN_8021Q_GVRP=y
++CONFIG_CAN=y
++CONFIG_CAN_C_CAN=y
++CONFIG_CAN_C_CAN_PLATFORM=y
++CONFIG_CAN_DEBUG_DEVICES=y
++CONFIG_UEVENT_HELPER_PATH="/sbin/hotplug"
++CONFIG_DEVTMPFS=y
++CONFIG_DEVTMPFS_MOUNT=y
++CONFIG_MTD=y
++CONFIG_MTD_BLOCK=y
++CONFIG_MTD_M25P80=y
++CONFIG_MTD_NAND=y
++CONFIG_MTD_NAND_DENALI_DT=y
++CONFIG_MTD_SPI_NOR=y
++CONFIG_SPI_CADENCE_QUADSPI=y
++CONFIG_OF_OVERLAY=y
++CONFIG_OVERLAY_FS=y
++CONFIG_CONFIGFS_FS=y
++CONFIG_BLK_DEV_RAM=y
++CONFIG_BLK_DEV_RAM_COUNT=2
++CONFIG_BLK_DEV_RAM_SIZE=8192
++CONFIG_BLK_DEV_NVME=m
++CONFIG_SRAM=y
++CONFIG_EEPROM_AT24=y
++CONFIG_SCSI=y
++# CONFIG_SCSI_PROC_FS is not set
++CONFIG_BLK_DEV_SD=y
++# CONFIG_SCSI_LOWLEVEL is not set
++CONFIG_NETDEVICES=y
++CONFIG_ALTERA_TSE=m
++CONFIG_E1000E=m
++CONFIG_IGB=m
++CONFIG_IXGBE=m
++CONFIG_STMMAC_ETH=y
++CONFIG_MARVELL_PHY=y
++CONFIG_MICREL_PHY=y
++CONFIG_INPUT_EVDEV=y
++CONFIG_INPUT_TOUCHSCREEN=y
++CONFIG_TOUCHSCREEN_STMPE=y
++# CONFIG_SERIO_SERPORT is not set
++CONFIG_SERIO_AMBAKMI=y
++CONFIG_LEGACY_PTY_COUNT=16
++CONFIG_SERIAL_8250=y
++CONFIG_SERIAL_8250_CONSOLE=y
++CONFIG_SERIAL_8250_NR_UARTS=2
++CONFIG_SERIAL_8250_RUNTIME_UARTS=2
++CONFIG_SERIAL_8250_DW=y
++CONFIG_SERIAL_ALTERA_UART=y
++CONFIG_SERIAL_ALTERA_CONSOLE=y
++CONFIG_SERIAL_ALTERA_JTAGUART=y
++CONFIG_SERIAL_ALTERA_JTAGUART_CONSOLE=y
++CONFIG_I2C=y
++CONFIG_I2C_CHARDEV=y
++CONFIG_I2C_DESIGNWARE_PLATFORM=y
++CONFIG_SPI=y
++CONFIG_SPI_DESIGNWARE=y
++CONFIG_SPI_DW_MMIO=y
++CONFIG_SPI_SPIDEV=y
++CONFIG_GPIOLIB=y
++CONFIG_GPIO_SYSFS=y
++CONFIG_GPIO_ALTERA=y
++CONFIG_GPIO_DWAPB=y
++CONFIG_GPIO_ALTERA_A10SR=y
++CONFIG_POWER_RESET=y
++CONFIG_POWER_RESET_GPIO=y
++CONFIG_SENSORS_MAX1619=y
++CONFIG_PMBUS=y
++CONFIG_SENSORS_LTC2978=y
++CONFIG_SENSORS_LTC2978_REGULATOR=y
++CONFIG_WATCHDOG=y
++CONFIG_DW_WATCHDOG=y
++CONFIG_MFD_ALTERA_A10SR=y
++CONFIG_MFD_STMPE=y
++CONFIG_REGULATOR=y
++CONFIG_REGULATOR_FIXED_VOLTAGE=y
++CONFIG_USB=y
++CONFIG_USB_STORAGE=y
++CONFIG_USB_DWC2=y
++CONFIG_NOP_USB_XCEIV=y
++CONFIG_USB_GADGET=y
++CONFIG_USB_OTG=y
++CONFIG_MMC=y
++CONFIG_MMC_DW=y
++CONFIG_NEW_LEDS=y
++CONFIG_LEDS_CLASS=y
++CONFIG_LEDS_GPIO=y
++CONFIG_LEDS_TRIGGERS=y
++CONFIG_LEDS_TRIGGER_TIMER=y
++CONFIG_LEDS_TRIGGER_CPU=y
++CONFIG_RTC_CLASS=y
++CONFIG_RTC_DRV_DS1307=y
++CONFIG_RTC_DRV_M41T80=y
++CONFIG_DMADEVICES=y
++CONFIG_PL330_DMA=y
++CONFIG_DMATEST=m
++CONFIG_FPGA=y
++CONFIG_FPGA_REGION=y
++CONFIG_FPGA_MGR_SOCFPGA=y
++CONFIG_FPGA_MGR_SOCFPGA_A10=y
++CONFIG_FPGA_BRIDGE=y
++CONFIG_SOCFPGA_FPGA_BRIDGE=y
++CONFIG_ALTERA_FREEZE_BRIDGE=y
++CONFIG_EXT2_FS=y
++CONFIG_EXT2_FS_XATTR=y
++CONFIG_EXT2_FS_POSIX_ACL=y
++CONFIG_EXT3_FS=y
++CONFIG_AUTOFS4_FS=y
++CONFIG_VFAT_FS=y
++CONFIG_NTFS_FS=y
++CONFIG_NTFS_RW=y
++CONFIG_TMPFS=y
++CONFIG_JFFS2_FS=y
++CONFIG_NFS_FS=y
++CONFIG_NFS_V3_ACL=y
++CONFIG_NFS_V4=y
++CONFIG_ROOT_NFS=y
++CONFIG_NFSD=y
++CONFIG_NFSD_V3_ACL=y
++CONFIG_NFSD_V4=y
++CONFIG_NLS_CODEPAGE_437=y
++CONFIG_NLS_ISO8859_1=y
++CONFIG_PRINTK_TIME=y
++CONFIG_DEBUG_INFO=y
++CONFIG_MAGIC_SYSRQ=y
++CONFIG_DETECT_HUNG_TASK=y
++# CONFIG_SCHED_DEBUG is not set
++CONFIG_FUNCTION_TRACER=y
++CONFIG_DEBUG_USER=y
++CONFIG_CMA=y
++CONFIG_DMA_CMA=y

@@ -296,7 +296,7 @@ int de10_nano_hdmi_config(int argc, char * const argv[]) {
 	/*
 	if we sense a monitor is attached then we attempt to read the EDID data
 	and configure ourselves according to that.  Otherwise we apply a default
-	1024*728 configuration
+	1280*1024 configuration
 	*/
 	env_set(HDMI_STATUS_ENV, "monitor present fork");
 	milestones |= 0x01 << 6;
@@ -618,23 +618,23 @@ int de10_nano_hdmi_config(int argc, char * const argv[]) {
 
 post_EDID_evaluation:
 
-	/* if no valid timing is found, then set 1024x768 default */
+	/* if no valid timing is found, then set 1280x1024 default */
 	env_set(HDMI_STATUS_ENV, "evaluate timing configuration");
 	milestones |= 0x01 << 12;
 	if(valid_timing_configuration_located == 0) {
-		print_str = "no valid timing found, setting 1024x768 default";
+		print_str = "no valid timing found, setting 1280x1024 default";
 		printf("%s%s\n", WARN_STR, print_str);
 		env_set(HDMI_INFO_ENV, print_str);
 
-		pixel_clock_MHz = 65000000;
-		horizontal_active_pixels = 1024;
-		horizontal_blanking_pixels = 320;
-		vertical_active_lines = 768;
+		pixel_clock_MHz = 108000000;
+		horizontal_active_pixels = 1280;
+		horizontal_sync_offset = 48;
+		horizontal_blanking_pixels = 248;
+		horizontal_sync_width = 112;
+		vertical_active_lines = 1024;
+		vertical_sync_offset = 1;
 		vertical_blanking_lines = 38;
-		horizontal_sync_offset = 24;
-		horizontal_sync_width = 136;
-		vertical_sync_offset = 3;
-		vertical_sync_width = 6;
+		vertical_sync_width = 3;
 		interlaced = 0;
 	}
 
